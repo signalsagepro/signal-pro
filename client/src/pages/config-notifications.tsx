@@ -56,8 +56,16 @@ const NOTIFICATION_CHANNELS = [
   },
 ];
 
+interface NotificationCardState {
+  [key: string]: {
+    enabled: boolean;
+    configData: Record<string, string>;
+  };
+}
+
 export default function ConfigNotifications() {
   const [testingChannel, setTestingChannel] = useState<string | null>(null);
+  const [cardStates, setCardStates] = useState<NotificationCardState>({});
   const { toast } = useToast();
 
   const { data: notificationConfigs = [], isLoading } = useQuery<NotificationConfig[]>({
@@ -98,10 +106,28 @@ export default function ConfigNotifications() {
 
   const renderNotificationCard = (channelInfo: typeof NOTIFICATION_CHANNELS[0]) => {
     const config = notificationConfigs.find((c) => c.channel === channelInfo.channel);
-    const [enabled, setEnabled] = useState(config?.enabled || false);
-    const [configData, setConfigData] = useState<Record<string, string>>(
-      (config?.config as Record<string, string>) || {}
-    );
+    
+    const cardState = cardStates[channelInfo.channel] || {
+      enabled: config?.enabled || false,
+      configData: (config?.config as Record<string, string>) || {},
+    };
+    
+    const enabled = cardState.enabled;
+    const configData = cardState.configData;
+    
+    const setEnabled = (value: boolean) => {
+      setCardStates({
+        ...cardStates,
+        [channelInfo.channel]: { ...cardState, enabled: value },
+      });
+    };
+    
+    const setConfigData = (data: Record<string, string>) => {
+      setCardStates({
+        ...cardStates,
+        [channelInfo.channel]: { ...cardState, configData: data },
+      });
+    };
 
     const hasChanges = enabled !== (config?.enabled || false) || 
                        JSON.stringify(configData) !== JSON.stringify(config?.config || {});
