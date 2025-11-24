@@ -8,6 +8,7 @@ import express, {
 } from "express";
 
 import { registerRoutes } from "./routes";
+import { marketDataGenerator } from "./services/market-data-generator";
 
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
@@ -92,5 +93,7 @@ export default async function runApp(
     reusePort: true,
   }, () => {
     log(`serving on port ${port}`);
+    marketDataGenerator.start();
+    log("Market data generator started", "signalpro");
   });
 }

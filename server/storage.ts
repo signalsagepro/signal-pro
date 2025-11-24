@@ -1,37 +1,348 @@
-import { type User, type InsertUser } from "@shared/schema";
+import {
+  type Asset,
+  type InsertAsset,
+  type Strategy,
+  type InsertStrategy,
+  type Signal,
+  type InsertSignal,
+  type BrokerConfig,
+  type InsertBrokerConfig,
+  type NotificationConfig,
+  type InsertNotificationConfig,
+  type CandleData,
+  type InsertCandleData,
+} from "@shared/schema";
 import { randomUUID } from "crypto";
 
-// modify the interface with any CRUD methods
-// you might need
-
 export interface IStorage {
-  getUser(id: string): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
+  getAssets(): Promise<Asset[]>;
+  getAsset(id: string): Promise<Asset | undefined>;
+  createAsset(asset: InsertAsset): Promise<Asset>;
+  updateAsset(id: string, data: Partial<Asset>): Promise<Asset | undefined>;
+  deleteAsset(id: string): Promise<boolean>;
+
+  getStrategies(): Promise<Strategy[]>;
+  getStrategy(id: string): Promise<Strategy | undefined>;
+  createStrategy(strategy: InsertStrategy): Promise<Strategy>;
+  updateStrategy(id: string, data: Partial<Strategy>): Promise<Strategy | undefined>;
+  deleteStrategy(id: string): Promise<boolean>;
+
+  getSignals(): Promise<Signal[]>;
+  getSignal(id: string): Promise<Signal | undefined>;
+  createSignal(signal: InsertSignal): Promise<Signal>;
+  updateSignal(id: string, data: Partial<Signal>): Promise<Signal | undefined>;
+  deleteSignal(id: string): Promise<boolean>;
+
+  getBrokerConfigs(): Promise<BrokerConfig[]>;
+  getBrokerConfig(id: string): Promise<BrokerConfig | undefined>;
+  createBrokerConfig(config: InsertBrokerConfig): Promise<BrokerConfig>;
+  updateBrokerConfig(id: string, data: Partial<BrokerConfig>): Promise<BrokerConfig | undefined>;
+  deleteBrokerConfig(id: string): Promise<boolean>;
+
+  getNotificationConfigs(): Promise<NotificationConfig[]>;
+  getNotificationConfig(id: string): Promise<NotificationConfig | undefined>;
+  createNotificationConfig(config: InsertNotificationConfig): Promise<NotificationConfig>;
+  updateNotificationConfig(id: string, data: Partial<NotificationConfig>): Promise<NotificationConfig | undefined>;
+  deleteNotificationConfig(id: string): Promise<boolean>;
+
+  getCandleData(assetId: string, timeframe: string): Promise<CandleData[]>;
+  createCandleData(candle: InsertCandleData): Promise<CandleData>;
 }
 
 export class MemStorage implements IStorage {
-  private users: Map<string, User>;
+  private assets: Map<string, Asset>;
+  private strategies: Map<string, Strategy>;
+  private signals: Map<string, Signal>;
+  private brokerConfigs: Map<string, BrokerConfig>;
+  private notificationConfigs: Map<string, NotificationConfig>;
+  private candleData: Map<string, CandleData>;
 
   constructor() {
-    this.users = new Map();
+    this.assets = new Map();
+    this.strategies = new Map();
+    this.signals = new Map();
+    this.brokerConfigs = new Map();
+    this.notificationConfigs = new Map();
+    this.candleData = new Map();
+
+    this.initializeDefaultData();
   }
 
-  async getUser(id: string): Promise<User | undefined> {
-    return this.users.get(id);
+  private initializeDefaultData() {
+    const indianBrokers = ["zerodha", "upstox", "angel"];
+    const forexBrokers = ["oanda", "ib", "fxcm"];
+    const notificationChannels = ["email", "sms", "webhook", "discord"];
+
+    indianBrokers.forEach((name) => {
+      const id = randomUUID();
+      this.brokerConfigs.set(id, {
+        id,
+        name,
+        type: "indian",
+        apiKey: null,
+        apiSecret: null,
+        enabled: false,
+        connected: false,
+        lastConnected: null,
+        metadata: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+    });
+
+    forexBrokers.forEach((name) => {
+      const id = randomUUID();
+      this.brokerConfigs.set(id, {
+        id,
+        name,
+        type: "forex",
+        apiKey: null,
+        apiSecret: null,
+        enabled: false,
+        connected: false,
+        lastConnected: null,
+        metadata: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+    });
+
+    notificationChannels.forEach((channel) => {
+      const id = randomUUID();
+      this.notificationConfigs.set(id, {
+        id,
+        channel,
+        enabled: false,
+        config: {},
+        testStatus: null,
+        lastTested: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+    });
+
+    const sampleAssets = [
+      { symbol: "RELIANCE", name: "Reliance Industries Ltd", type: "indian_stock" as const, exchange: "NSE" },
+      { symbol: "TCS", name: "Tata Consultancy Services", type: "indian_stock" as const, exchange: "NSE" },
+      { symbol: "HDFCBANK", name: "HDFC Bank", type: "indian_stock" as const, exchange: "NSE" },
+      { symbol: "EURUSD", name: "EUR/USD", type: "forex" as const, exchange: "Forex" },
+      { symbol: "GBPUSD", name: "GBP/USD", type: "forex" as const, exchange: "Forex" },
+    ];
+
+    sampleAssets.forEach((asset) => {
+      const id = randomUUID();
+      this.assets.set(id, {
+        ...asset,
+        id,
+        enabled: true,
+        createdAt: new Date(),
+      });
+    });
   }
 
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
+  async getAssets(): Promise<Asset[]> {
+    return Array.from(this.assets.values()).sort((a, b) =>
+      a.symbol.localeCompare(b.symbol)
     );
   }
 
-  async createUser(insertUser: InsertUser): Promise<User> {
+  async getAsset(id: string): Promise<Asset | undefined> {
+    return this.assets.get(id);
+  }
+
+  async createAsset(insertAsset: InsertAsset): Promise<Asset> {
     const id = randomUUID();
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
-    return user;
+    const asset: Asset = {
+      ...insertAsset,
+      id,
+      createdAt: new Date(),
+    };
+    this.assets.set(id, asset);
+    return asset;
+  }
+
+  async updateAsset(id: string, data: Partial<Asset>): Promise<Asset | undefined> {
+    const asset = this.assets.get(id);
+    if (!asset) return undefined;
+
+    const updated: Asset = { ...asset, ...data };
+    this.assets.set(id, updated);
+    return updated;
+  }
+
+  async deleteAsset(id: string): Promise<boolean> {
+    return this.assets.delete(id);
+  }
+
+  async getStrategies(): Promise<Strategy[]> {
+    return Array.from(this.strategies.values()).sort(
+      (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
+    );
+  }
+
+  async getStrategy(id: string): Promise<Strategy | undefined> {
+    return this.strategies.get(id);
+  }
+
+  async createStrategy(insertStrategy: InsertStrategy): Promise<Strategy> {
+    const id = randomUUID();
+    const strategy: Strategy = {
+      ...insertStrategy,
+      id,
+      signalCount: 0,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.strategies.set(id, strategy);
+    return strategy;
+  }
+
+  async updateStrategy(id: string, data: Partial<Strategy>): Promise<Strategy | undefined> {
+    const strategy = this.strategies.get(id);
+    if (!strategy) return undefined;
+
+    const updated: Strategy = { ...strategy, ...data, updatedAt: new Date() };
+    this.strategies.set(id, updated);
+    return updated;
+  }
+
+  async deleteStrategy(id: string): Promise<boolean> {
+    return this.strategies.delete(id);
+  }
+
+  async getSignals(): Promise<Signal[]> {
+    return Array.from(this.signals.values()).sort(
+      (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
+    );
+  }
+
+  async getSignal(id: string): Promise<Signal | undefined> {
+    return this.signals.get(id);
+  }
+
+  async createSignal(insertSignal: InsertSignal): Promise<Signal> {
+    const id = randomUUID();
+    const signal: Signal = {
+      ...insertSignal,
+      id,
+      createdAt: new Date(),
+    };
+    this.signals.set(id, signal);
+
+    const strategy = this.strategies.get(insertSignal.strategyId);
+    if (strategy) {
+      strategy.signalCount += 1;
+      this.strategies.set(strategy.id, strategy);
+    }
+
+    return signal;
+  }
+
+  async updateSignal(id: string, data: Partial<Signal>): Promise<Signal | undefined> {
+    const signal = this.signals.get(id);
+    if (!signal) return undefined;
+
+    const updated: Signal = { ...signal, ...data };
+    this.signals.set(id, updated);
+    return updated;
+  }
+
+  async deleteSignal(id: string): Promise<boolean> {
+    return this.signals.delete(id);
+  }
+
+  async getBrokerConfigs(): Promise<BrokerConfig[]> {
+    return Array.from(this.brokerConfigs.values());
+  }
+
+  async getBrokerConfig(id: string): Promise<BrokerConfig | undefined> {
+    return this.brokerConfigs.get(id);
+  }
+
+  async createBrokerConfig(insertConfig: InsertBrokerConfig): Promise<BrokerConfig> {
+    const id = randomUUID();
+    const config: BrokerConfig = {
+      ...insertConfig,
+      id,
+      connected: false,
+      lastConnected: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.brokerConfigs.set(id, config);
+    return config;
+  }
+
+  async updateBrokerConfig(
+    id: string,
+    data: Partial<BrokerConfig>
+  ): Promise<BrokerConfig | undefined> {
+    const config = this.brokerConfigs.get(id);
+    if (!config) return undefined;
+
+    const updated: BrokerConfig = { ...config, ...data, updatedAt: new Date() };
+    this.brokerConfigs.set(id, updated);
+    return updated;
+  }
+
+  async deleteBrokerConfig(id: string): Promise<boolean> {
+    return this.brokerConfigs.delete(id);
+  }
+
+  async getNotificationConfigs(): Promise<NotificationConfig[]> {
+    return Array.from(this.notificationConfigs.values());
+  }
+
+  async getNotificationConfig(id: string): Promise<NotificationConfig | undefined> {
+    return this.notificationConfigs.get(id);
+  }
+
+  async createNotificationConfig(
+    insertConfig: InsertNotificationConfig
+  ): Promise<NotificationConfig> {
+    const id = randomUUID();
+    const config: NotificationConfig = {
+      ...insertConfig,
+      id,
+      testStatus: null,
+      lastTested: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.notificationConfigs.set(id, config);
+    return config;
+  }
+
+  async updateNotificationConfig(
+    id: string,
+    data: Partial<NotificationConfig>
+  ): Promise<NotificationConfig | undefined> {
+    const config = this.notificationConfigs.get(id);
+    if (!config) return undefined;
+
+    const updated: NotificationConfig = { ...config, ...data, updatedAt: new Date() };
+    this.notificationConfigs.set(id, updated);
+    return updated;
+  }
+
+  async deleteNotificationConfig(id: string): Promise<boolean> {
+    return this.notificationConfigs.delete(id);
+  }
+
+  async getCandleData(assetId: string, timeframe: string): Promise<CandleData[]> {
+    return Array.from(this.candleData.values())
+      .filter((c) => c.assetId === assetId && c.timeframe === timeframe)
+      .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+  }
+
+  async createCandleData(insertCandle: InsertCandleData): Promise<CandleData> {
+    const id = randomUUID();
+    const candle: CandleData = {
+      ...insertCandle,
+      id,
+    };
+    this.candleData.set(id, candle);
+    return candle;
   }
 }
 
