@@ -38,9 +38,19 @@ export function useAuth() {
   const login = async (data: { email: string; password: string }) => {
     try {
       await loginMutation.mutateAsync(data);
-      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
-      await refetch();
-      return true;
+      // Wait a tiny bit to ensure session is set on server
+      await new Promise(resolve => setTimeout(resolve, 100));
+      // Manually fetch and set the user in cache
+      const response = await fetch("/api/auth/me", {
+        cache: "no-store",
+        headers: { "Cache-Control": "no-cache" }
+      });
+      if (response.ok) {
+        const userData = await response.json();
+        queryClient.setQueryData(["/api/auth/me"], userData);
+        return true;
+      }
+      return false;
     } catch (error) {
       console.error("Login error:", error);
       return false;
@@ -50,9 +60,19 @@ export function useAuth() {
   const signup = async (data: { email: string; password: string; name: string }) => {
     try {
       await signupMutation.mutateAsync(data);
-      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
-      await refetch();
-      return true;
+      // Wait a tiny bit to ensure session is set on server
+      await new Promise(resolve => setTimeout(resolve, 100));
+      // Manually fetch and set the user in cache
+      const response = await fetch("/api/auth/me", {
+        cache: "no-store",
+        headers: { "Cache-Control": "no-cache" }
+      });
+      if (response.ok) {
+        const userData = await response.json();
+        queryClient.setQueryData(["/api/auth/me"], userData);
+        return true;
+      }
+      return false;
     } catch (error) {
       console.error("Signup error:", error);
       return false;
@@ -62,8 +82,8 @@ export function useAuth() {
   const logout = async () => {
     try {
       await logoutMutation.mutateAsync();
-      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
-      await refetch();
+      // Manually clear the user from cache
+      queryClient.setQueryData(["/api/auth/me"], null);
       return true;
     } catch (error) {
       console.error("Logout error:", error);
