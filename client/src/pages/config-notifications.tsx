@@ -1,17 +1,41 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useLocation } from "wouter";
+import { useAuth } from "@/hooks/use-auth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Bell, Mail, MessageSquare, Webhook, CheckCircle2, Loader2 } from "lucide-react";
+import { Bell, Mail, MessageSquare, Webhook, CheckCircle2, Loader2, X } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { NotificationConfig } from "@shared/schema";
 import { Textarea } from "@/components/ui/textarea";
+
+export default function ConfigNotifications() {
+  const { user } = useAuth();
+  const [, navigate] = useLocation();
+
+  useEffect(() => {
+    if (user && user.role !== "admin") {
+      navigate("/");
+    }
+  }, [user, navigate]);
+
+  if (!user || user.role !== "admin") {
+    return null;
+  }
+
+  return <ConfigNotificationsContent />;
+}
+
+function ConfigNotificationsContent() {
+  const [testingChannel, setTestingChannel] = useState<string | null>(null);
+  const [cardStates, setCardStates] = useState<NotificationCardState>({});
+  const { toast } = useToast();
 
 const NOTIFICATION_CHANNELS = [
   {
@@ -20,7 +44,7 @@ const NOTIFICATION_CHANNELS = [
     icon: Mail,
     description: "Receive signals via email",
     fields: [
-      { key: "to", label: "Email Address", type: "email", placeholder: "your@email.com" },
+      { key: "recipients", label: "Email Recipients", type: "array-email", placeholder: "your@email.com" },
       { key: "from", label: "From Address", type: "email", placeholder: "signals@signalpro.com" },
     ],
   },
@@ -30,7 +54,7 @@ const NOTIFICATION_CHANNELS = [
     icon: MessageSquare,
     description: "Get SMS notifications for signals",
     fields: [
-      { key: "phoneNumber", label: "Phone Number", type: "tel", placeholder: "+1234567890" },
+      { key: "phoneNumbers", label: "Phone Numbers", type: "array-tel", placeholder: "+1234567890" },
       { key: "twilioAccountSid", label: "Twilio Account SID", type: "text", placeholder: "ACxxxx" },
       { key: "twilioAuthToken", label: "Twilio Auth Token", type: "password", placeholder: "Your auth token" },
     ],
@@ -69,14 +93,9 @@ const NOTIFICATION_CHANNELS = [
 interface NotificationCardState {
   [key: string]: {
     enabled: boolean;
-    configData: Record<string, string>;
+    configData: Record<string, string | string[]>;
   };
 }
-
-export default function ConfigNotifications() {
-  const [testingChannel, setTestingChannel] = useState<string | null>(null);
-  const [cardStates, setCardStates] = useState<NotificationCardState>({});
-  const { toast } = useToast();
 
   const { data: notificationConfigs = [], isLoading } = useQuery<NotificationConfig[]>({
     queryKey: ["/api/notification-configs"],
@@ -120,7 +139,7 @@ export default function ConfigNotifications() {
     
     const cardState = cardStates[channelKey] || {
       enabled: config?.enabled || false,
-      configData: (config?.config as Record<string, string>) || {},
+      configData: (config?.config as Record<string, string | string[]>) || {},
     };
     
     const enabled = cardState.enabled;
@@ -133,7 +152,7 @@ export default function ConfigNotifications() {
       });
     };
     
-    const setConfigData = (data: Record<string, string>) => {
+    const setConfigData = (data: Record<string, string | string[]>) => {
       setCardStates({
         ...cardStates,
         [channelKey]: { ...cardState, configData: data },
@@ -167,14 +186,58 @@ export default function ConfigNotifications() {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          {channelInfo.fields.map((field) => (
+          {channelInfo.fields.map((field) => {
+            const isArrayField = field.type.startsWith("array-");
+            const baseType = isArrayField ? field.type.split("-")[1] : field.type;
+            const arrayValue = isArrayField ? (Array.isArray(configData[field.key]) ? configData[field.key] : []) : [];
+            
+            return (
             <div key={field.key} className="space-y-2">
               <Label htmlFor={`${channelInfo.channel}-${field.key}`}>{field.label}</Label>
-              {field.type === "textarea" ? (
+              {isArrayField ? (
+                <div className="space-y-2">
+                  {(arrayValue as string[]).map((item, idx) => (
+                    <div key={idx} className="flex gap-2">
+                      <Input
+                        type={baseType}
+                        placeholder={field.placeholder}
+                        value={item}
+                        onChange={(e) => {
+                          const newArray = [...(arrayValue as string[])];
+                          newArray[idx] = e.target.value;
+                          setConfigData({ ...configData, [field.key]: newArray });
+                        }}
+                        data-testid={`input-${channelInfo.channel}-${field.key}-${idx}`}
+                      />
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => {
+                          const newArray = (arrayValue as string[]).filter((_, i) => i !== idx);
+                          setConfigData({ ...configData, [field.key]: newArray });
+                        }}
+                        data-testid={`button-remove-${field.key}-${idx}`}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setConfigData({ ...configData, [field.key]: [...(arrayValue as string[]), ""] });
+                    }}
+                    data-testid={`button-add-${field.key}`}
+                  >
+                    Add {field.label}
+                  </Button>
+                </div>
+              ) : field.type === "textarea" ? (
                 <Textarea
                   id={`${channelInfo.channel}-${field.key}`}
                   placeholder={field.placeholder}
-                  value={configData[field.key] || ""}
+                  value={(configData[field.key] as string) || ""}
                   onChange={(e) => setConfigData({ ...configData, [field.key]: e.target.value })}
                   rows={3}
                   data-testid={`input-${channelInfo.channel}-${field.key}`}
@@ -184,13 +247,14 @@ export default function ConfigNotifications() {
                   id={`${channelInfo.channel}-${field.key}`}
                   type={field.type}
                   placeholder={field.placeholder}
-                  value={configData[field.key] || ""}
+                  value={(configData[field.key] as string) || ""}
                   onChange={(e) => setConfigData({ ...configData, [field.key]: e.target.value })}
                   data-testid={`input-${channelInfo.channel}-${field.key}`}
                 />
               )}
             </div>
-          ))}
+            );
+          })}
           <div className="flex items-center justify-between pt-2">
             <Label htmlFor={`${channelInfo.channel}-enabled`}>Enable Notifications</Label>
             <Switch

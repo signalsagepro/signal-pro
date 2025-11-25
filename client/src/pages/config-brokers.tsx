@@ -1,5 +1,8 @@
+import { useEffect } from "react";
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useLocation } from "wouter";
+import { useAuth } from "@/hooks/use-auth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,7 +16,21 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { BrokerConfig } from "@shared/schema";
 
-const INDIAN_BROKERS = [
+export default function ConfigBrokers() {
+  const { user } = useAuth();
+  const [, navigate] = useLocation();
+
+  useEffect(() => {
+    if (user && user.role !== "admin") {
+      navigate("/");
+    }
+  }, [user, navigate]);
+
+  if (!user || user.role !== "admin") {
+    return null;
+  }
+
+  const INDIAN_BROKERS = [
   { id: "zerodha", name: "Zerodha Kite", description: "India's largest broker" },
   { id: "upstox", name: "Upstox", description: "Low-cost Indian broker" },
   { id: "angel", name: "Angel One", description: "Angel Broking platform" },

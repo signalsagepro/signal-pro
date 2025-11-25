@@ -117,27 +117,29 @@ export function AppSidebar({ devMode, onLogoClick }: AppSidebarProps) {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        <SidebarGroup>
-          <SidebarGroupLabel>Configuration</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {configNavItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={location === item.url}
-                    data-testid={item.testId}
-                  >
-                    <Link href={item.url}>
-                      <item.icon className="h-4 w-4" />
-                      <span>{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {user?.role === "admin" && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Configuration</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {configNavItems.map((item) => (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={location === item.url}
+                      data-testid={item.testId}
+                    >
+                      <Link href={item.url}>
+                        <item.icon className="h-4 w-4" />
+                        <span>{item.title}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
 
         {user?.role === "admin" && (
           <SidebarGroup>
@@ -163,7 +165,7 @@ export function AppSidebar({ devMode, onLogoClick }: AppSidebarProps) {
           </SidebarGroup>
         )}
 
-        {devMode && (
+        {devMode && user?.role === "admin" && (
           <SidebarGroup>
             <SidebarGroupLabel className="flex items-center gap-2">
               Developer
@@ -204,7 +206,7 @@ export function AppSidebar({ devMode, onLogoClick }: AppSidebarProps) {
           <LogOut className="h-4 w-4 mr-2" />
           Logout
         </Button>
-        {devMode && (
+        {devMode && user?.role === "admin" && (
           <div className="rounded-md bg-muted p-3 border border-border">
             <div className="flex items-center gap-2 text-xs">
               <Code2 className="h-3 w-3 text-muted-foreground" />

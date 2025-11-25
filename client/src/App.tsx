@@ -21,17 +21,17 @@ import ConfigNotifications from "@/pages/config-notifications";
 import Users from "@/pages/users";
 import DevStrategyBuilder from "@/pages/dev-strategy-builder";
 
-function Router({ devMode }: { devMode: boolean }) {
+function Router({ devMode, isAdmin }: { devMode: boolean; isAdmin: boolean }) {
   return (
     <Switch>
       <Route path="/" component={Dashboard} />
       <Route path="/strategies" component={Strategies} />
       <Route path="/assets" component={Assets} />
       <Route path="/signals" component={Signals} />
-      <Route path="/config/brokers" component={ConfigBrokers} />
-      <Route path="/config/notifications" component={ConfigNotifications} />
-      <Route path="/users" component={Users} />
-      {devMode && <Route path="/dev/strategy-builder" component={DevStrategyBuilder} />}
+      {isAdmin && <Route path="/config/brokers" component={ConfigBrokers} />}
+      {isAdmin && <Route path="/config/notifications" component={ConfigNotifications} />}
+      {isAdmin && <Route path="/users" component={Users} />}
+      {devMode && isAdmin && <Route path="/dev/strategy-builder" component={DevStrategyBuilder} />}
       <Route component={NotFound} />
     </Switch>
   );
@@ -59,11 +59,14 @@ function AuthGuard() {
 }
 
 function ProtectedLayout() {
+  const { user } = useAuth();
   const [devMode, setDevMode] = useState(false);
   const [logoClickCount, setLogoClickCount] = useState(0);
   const [lastClickTime, setLastClickTime] = useState(0);
 
   const handleLogoClick = () => {
+    if (user?.role !== "admin") return;
+    
     const now = Date.now();
     
     if (now - lastClickTime > 2000) {
@@ -96,7 +99,7 @@ function ProtectedLayout() {
             <ThemeToggle />
           </header>
           <main className="flex-1 overflow-auto p-6">
-            <Router devMode={devMode} />
+            <Router devMode={devMode} isAdmin={user?.role === "admin"} />
           </main>
         </div>
       </div>
