@@ -16,15 +16,6 @@ function broadcastSignal(signal: any) {
   });
 }
 
-declare global {
-  namespace Express {
-    interface Request {
-      userId?: string;
-      userRole?: string;
-    }
-  }
-}
-
 export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/auth/login", async (req: Request, res: Response) => {
     try {
@@ -34,8 +25,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.status(401).json({ error: "Invalid credentials" });
         return;
       }
-      req.session!.userId = user.id;
-      req.session!.userRole = user.role;
+      if (req.session) {
+        req.session.userId = user.id;
+        req.session.userRole = user.role;
+      }
       res.json({ user: { id: user.id, email: user.email, name: user.name, role: user.role } });
     } catch (error) {
       res.status(500).json({ error: "Login failed" });
@@ -51,10 +44,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return;
       }
       const user = await storage.createUser(data);
-      req.session!.userId = user.id;
-      req.session!.userRole = user.role;
+      if (req.session) {
+        req.session.userId = user.id;
+        req.session.userRole = user.role;
+      }
       res.status(201).json({ user: { id: user.id, email: user.email, name: user.name, role: user.role } });
-    } catch (error) {
+    } catch (error: unknown) {
       if (error instanceof z.ZodError) {
         res.status(400).json({ error: "Validation error", details: error.errors });
       } else {
@@ -64,22 +59,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.post("/api/auth/logout", async (req: Request, res: Response) => {
-    req.session!.destroy((err) => {
-      if (err) {
-        res.status(500).json({ error: "Logout failed" });
-      } else {
-        res.json({ success: true });
-      }
-    });
+    if (req.session) {
+      req.session.destroy((err: Error | null) => {
+        if (err) {
+          res.status(500).json({ error: "Logout failed" });
+        } else {
+          res.json({ success: true });
+        }
+      });
+    } else {
+      res.json({ success: true });
+    }
   });
 
   app.get("/api/auth/me", async (req: Request, res: Response) => {
     try {
-      if (!req.session!.userId) {
+      if (!req.session?.userId) {
         res.json(null);
         return;
       }
-      const user = await storage.getUser(req.session!.userId);
+      const user = await storage.getUser(req.session.userId);
       if (!user) {
         res.json(null);
         return;

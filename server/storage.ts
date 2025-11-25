@@ -95,7 +95,7 @@ export class MemStorage implements IStorage {
         enabled: false,
         connected: false,
         lastConnected: null,
-        metadata: null,
+        metadata: null as unknown,
         createdAt: new Date(),
         updatedAt: new Date(),
       });
@@ -112,7 +112,7 @@ export class MemStorage implements IStorage {
         enabled: false,
         connected: false,
         lastConnected: null,
-        metadata: null,
+        metadata: null as unknown,
         createdAt: new Date(),
         updatedAt: new Date(),
       });
@@ -124,7 +124,7 @@ export class MemStorage implements IStorage {
         id,
         channel,
         enabled: false,
-        config: {},
+        config: {} as unknown,
         testStatus: null,
         lastTested: null,
         createdAt: new Date(),
@@ -133,42 +133,45 @@ export class MemStorage implements IStorage {
     });
 
     const sampleAssets = [
-      { symbol: "RELIANCE", name: "Reliance Industries Ltd", type: "indian_stock" as const, exchange: "NSE" },
-      { symbol: "TCS", name: "Tata Consultancy Services", type: "indian_stock" as const, exchange: "NSE" },
-      { symbol: "HDFCBANK", name: "HDFC Bank", type: "indian_stock" as const, exchange: "NSE" },
-      { symbol: "INFY", name: "Infosys Ltd", type: "indian_stock" as const, exchange: "NSE" },
-      { symbol: "WIPRO", name: "Wipro Limited", type: "indian_stock" as const, exchange: "NSE" },
-      { symbol: "HINDUNILVR", name: "Hindustan Unilever", type: "indian_stock" as const, exchange: "NSE" },
-      { symbol: "MARUTI", name: "Maruti Suzuki India", type: "indian_stock" as const, exchange: "NSE" },
-      { symbol: "BAJAJFINSV", name: "Bajaj Finserv", type: "indian_stock" as const, exchange: "NSE" },
-      { symbol: "SBIN", name: "State Bank of India", type: "indian_stock" as const, exchange: "NSE" },
-      { symbol: "ICICIBANK", name: "ICICI Bank", type: "indian_stock" as const, exchange: "NSE" },
-      { symbol: "NIFTY50", name: "Nifty 50 Index", type: "indian_futures" as const, exchange: "NSE" },
-      { symbol: "BANKNIFTY", name: "Bank Nifty Index", type: "indian_futures" as const, exchange: "NSE" },
-      { symbol: "FINNIFTY", name: "Finnifty 50 Index", type: "indian_futures" as const, exchange: "NSE" },
-      { symbol: "MIDCPNIFTY", name: "Mid Cap Nifty Index", type: "indian_futures" as const, exchange: "NSE" },
-      { symbol: "NIFTYNXT50", name: "Nifty Next 50", type: "indian_futures" as const, exchange: "NSE" },
-      { symbol: "GOLD", name: "Gold Futures", type: "indian_futures" as const, exchange: "MCX" },
-      { symbol: "CRUDE", name: "Crude Oil Futures", type: "indian_futures" as const, exchange: "MCX" },
-      { symbol: "NATURALGAS", name: "Natural Gas Futures", type: "indian_futures" as const, exchange: "MCX" },
-      { symbol: "SILVER", name: "Silver Futures", type: "indian_futures" as const, exchange: "MCX" },
-      { symbol: "COPPER", name: "Copper Futures", type: "indian_futures" as const, exchange: "MCX" },
-      { symbol: "EURUSD", name: "EUR/USD", type: "forex" as const, exchange: "Forex" },
-      { symbol: "GBPUSD", name: "GBP/USD", type: "forex" as const, exchange: "Forex" },
-      { symbol: "USDJPY", name: "USD/JPY", type: "forex" as const, exchange: "Forex" },
-      { symbol: "AUDUSD", name: "AUD/USD", type: "forex" as const, exchange: "Forex" },
-      { symbol: "USDINR", name: "USD/INR", type: "forex" as const, exchange: "Forex" },
+      { symbol: "RELIANCE", name: "Reliance Industries Ltd", type: "indian_stock" as const, exchange: "NSE", enabled: true },
+      { symbol: "TCS", name: "Tata Consultancy Services", type: "indian_stock" as const, exchange: "NSE", enabled: true },
+      { symbol: "HDFCBANK", name: "HDFC Bank", type: "indian_stock" as const, exchange: "NSE", enabled: true },
+      { symbol: "INFY", name: "Infosys Ltd", type: "indian_stock" as const, exchange: "NSE", enabled: true },
+      { symbol: "WIPRO", name: "Wipro Limited", type: "indian_stock" as const, exchange: "NSE", enabled: true },
+      { symbol: "HINDUNILVR", name: "Hindustan Unilever", type: "indian_stock" as const, exchange: "NSE", enabled: true },
+      { symbol: "MARUTI", name: "Maruti Suzuki India", type: "indian_stock" as const, exchange: "NSE", enabled: true },
+      { symbol: "BAJAJFINSV", name: "Bajaj Finserv", type: "indian_stock" as const, exchange: "NSE", enabled: true },
+      { symbol: "SBIN", name: "State Bank of India", type: "indian_stock" as const, exchange: "NSE", enabled: true },
+      { symbol: "ICICIBANK", name: "ICICI Bank", type: "indian_stock" as const, exchange: "NSE", enabled: true },
+      { symbol: "NIFTY50", name: "Nifty 50 Index", type: "indian_futures" as const, exchange: "NSE", enabled: true },
+      { symbol: "BANKNIFTY", name: "Bank Nifty Index", type: "indian_futures" as const, exchange: "NSE", enabled: true },
+      { symbol: "FINNIFTY", name: "Finnifty 50 Index", type: "indian_futures" as const, exchange: "NSE", enabled: true },
+      { symbol: "MIDCPNIFTY", name: "Mid Cap Nifty Index", type: "indian_futures" as const, exchange: "NSE", enabled: true },
+      { symbol: "NIFTYNXT50", name: "Nifty Next 50", type: "indian_futures" as const, exchange: "NSE", enabled: true },
+      { symbol: "GOLD", name: "Gold Futures", type: "indian_futures" as const, exchange: "MCX", enabled: true },
+      { symbol: "CRUDE", name: "Crude Oil Futures", type: "indian_futures" as const, exchange: "MCX", enabled: true },
+      { symbol: "NATURALGAS", name: "Natural Gas Futures", type: "indian_futures" as const, exchange: "MCX", enabled: true },
+      { symbol: "SILVER", name: "Silver Futures", type: "indian_futures" as const, exchange: "MCX", enabled: true },
+      { symbol: "COPPER", name: "Copper Futures", type: "indian_futures" as const, exchange: "MCX", enabled: true },
+      { symbol: "EURUSD", name: "EUR/USD", type: "forex" as const, exchange: "Forex", enabled: true },
+      { symbol: "GBPUSD", name: "GBP/USD", type: "forex" as const, exchange: "Forex", enabled: true },
+      { symbol: "USDJPY", name: "USD/JPY", type: "forex" as const, exchange: "Forex", enabled: true },
+      { symbol: "AUDUSD", name: "AUD/USD", type: "forex" as const, exchange: "Forex", enabled: true },
+      { symbol: "USDINR", name: "USD/INR", type: "forex" as const, exchange: "Forex", enabled: true },
     ];
 
     sampleAssets.forEach((asset) => {
       const id = randomUUID();
-      this.assets.set(id, {
-        ...asset,
+      const fullAsset: Asset = {
         id,
-        enabled: asset.enabled ?? true,
+        symbol: asset.symbol,
+        name: asset.name,
+        type: asset.type,
         exchange: asset.exchange || "NSE",
+        enabled: asset.enabled,
         createdAt: new Date(),
-      });
+      };
+      this.assets.set(id, fullAsset);
     });
   }
 
@@ -221,6 +224,10 @@ export class MemStorage implements IStorage {
     const strategy: Strategy = {
       ...insertStrategy,
       id,
+      description: insertStrategy.description ?? null,
+      enabled: insertStrategy.enabled ?? true,
+      isCustom: insertStrategy.isCustom ?? false,
+      formula: insertStrategy.formula ?? null,
       signalCount: 0,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -292,6 +299,8 @@ export class MemStorage implements IStorage {
     const signal: Signal = {
       ...insertSignal,
       id,
+      metadata: insertSignal.metadata ?? null as unknown,
+      dismissed: insertSignal.dismissed ?? false,
       createdAt: new Date(),
     };
     this.signals.set(id, signal);
@@ -331,6 +340,10 @@ export class MemStorage implements IStorage {
     const config: BrokerConfig = {
       ...insertConfig,
       id,
+      enabled: insertConfig.enabled ?? false,
+      apiKey: insertConfig.apiKey ?? null,
+      apiSecret: insertConfig.apiSecret ?? null,
+      metadata: insertConfig.metadata ?? null as unknown,
       connected: false,
       lastConnected: null,
       createdAt: new Date(),
@@ -371,6 +384,7 @@ export class MemStorage implements IStorage {
     const config: NotificationConfig = {
       ...insertConfig,
       id,
+      enabled: insertConfig.enabled ?? false,
       testStatus: null,
       lastTested: null,
       createdAt: new Date(),
@@ -407,6 +421,8 @@ export class MemStorage implements IStorage {
     const candle: CandleData = {
       ...insertCandle,
       id,
+      ema50: insertCandle.ema50 ?? null,
+      ema200: insertCandle.ema200 ?? null,
     };
     this.candleData.set(id, candle);
     return candle;
@@ -427,6 +443,7 @@ export class MemStorage implements IStorage {
       ...insertUser,
       id,
       password: hashedPassword,
+      role: insertUser.role ?? "user",
       createdAt: new Date(),
       updatedAt: new Date(),
     };

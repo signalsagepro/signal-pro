@@ -1,4 +1,4 @@
-import { LayoutDashboard, TrendingUp, Layers, Bell, Settings, Code2, Signal } from "lucide-react";
+import { LayoutDashboard, TrendingUp, Layers, Bell, Settings, Code2, Signal, LogOut } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import {
   Sidebar,
@@ -13,6 +13,8 @@ import {
   SidebarFooter,
 } from "@/components/ui/sidebar";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { useAuth } from "@/hooks/use-auth";
 
 interface AppSidebarProps {
   devMode: boolean;
@@ -63,6 +65,7 @@ const configNavItems = [
 
 export function AppSidebar({ devMode, onLogoClick }: AppSidebarProps) {
   const [location] = useLocation();
+  const { user, logout } = useAuth();
 
   return (
     <Sidebar>
@@ -153,7 +156,21 @@ export function AppSidebar({ devMode, onLogoClick }: AppSidebarProps) {
         )}
       </SidebarContent>
 
-      <SidebarFooter className="p-4">
+      <SidebarFooter className="p-4 space-y-2">
+        <div className="text-xs text-muted-foreground px-2">
+          <p className="font-medium">{user?.name}</p>
+          <p>{user?.role === "admin" ? "Administrator" : "User"}</p>
+        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full justify-start text-destructive hover:text-destructive"
+          onClick={() => logout()}
+          data-testid="button-logout"
+        >
+          <LogOut className="h-4 w-4 mr-2" />
+          Logout
+        </Button>
         {devMode && (
           <div className="rounded-md bg-muted p-3 border border-border">
             <div className="flex items-center gap-2 text-xs">

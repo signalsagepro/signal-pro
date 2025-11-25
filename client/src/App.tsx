@@ -11,6 +11,7 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { useAuth } from "@/hooks/use-auth";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/login";
+import Signup from "@/pages/signup";
 import Dashboard from "@/pages/dashboard";
 import Strategies from "@/pages/strategies";
 import Assets from "@/pages/assets";
@@ -34,10 +35,7 @@ function Router({ devMode }: { devMode: boolean }) {
   );
 }
 
-function App() {
-  const [devMode, setDevMode] = useState(false);
-  const [logoClickCount, setLogoClickCount] = useState(0);
-  const [lastClickTime, setLastClickTime] = useState(0);
+function AuthChecker() {
   const { user, isLoading } = useAuth();
   const [, navigate] = useLocation();
 
@@ -46,6 +44,23 @@ function App() {
       navigate("/login");
     }
   }, [isLoading, user, navigate]);
+
+  if (isLoading) {
+    return <div className="flex items-center justify-center h-screen">Loading...</div>;
+  }
+
+  if (!user) {
+    return null;
+  }
+
+  return null;
+}
+
+function AppContent() {
+  const [devMode, setDevMode] = useState(false);
+  const [logoClickCount, setLogoClickCount] = useState(0);
+  const [lastClickTime, setLastClickTime] = useState(0);
+  const { user, isLoading } = useAuth();
 
   const handleLogoClick = () => {
     const now = Date.now();
@@ -75,39 +90,40 @@ function App() {
   }
 
   if (!user) {
-    return (
-      <QueryClientProvider client={queryClient}>
-        <ThemeProvider defaultTheme="light">
-          <TooltipProvider>
-            <Switch>
-              <Route path="/login" component={Login} />
-              <Route path="*" component={Login} />
-            </Switch>
-            <Toaster />
-          </TooltipProvider>
-        </ThemeProvider>
-      </QueryClientProvider>
-    );
+    return null;
   }
 
+  return (
+    <SidebarProvider style={style as React.CSSProperties}>
+      <div className="flex h-screen w-full">
+        <AppSidebar devMode={devMode} onLogoClick={handleLogoClick} />
+        <div className="flex flex-col flex-1">
+          <header className="flex items-center justify-between p-4 border-b gap-4">
+            <SidebarTrigger data-testid="button-sidebar-toggle" />
+            <ThemeToggle />
+          </header>
+          <main className="flex-1 overflow-auto p-6">
+            <Router devMode={devMode} />
+          </main>
+        </div>
+      </div>
+    </SidebarProvider>
+  );
+}
+
+function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider defaultTheme="light">
         <TooltipProvider>
-          <SidebarProvider style={style as React.CSSProperties}>
-            <div className="flex h-screen w-full">
-              <AppSidebar devMode={devMode} onLogoClick={handleLogoClick} />
-              <div className="flex flex-col flex-1">
-                <header className="flex items-center justify-between p-4 border-b gap-4">
-                  <SidebarTrigger data-testid="button-sidebar-toggle" />
-                  <ThemeToggle />
-                </header>
-                <main className="flex-1 overflow-auto p-6">
-                  <Router devMode={devMode} />
-                </main>
-              </div>
-            </div>
-          </SidebarProvider>
+          <Switch>
+            <Route path="/login" component={Login} />
+            <Route path="/signup" component={Signup} />
+            <Route>
+              <AuthChecker />
+              <AppContent />
+            </Route>
+          </Switch>
           <Toaster />
         </TooltipProvider>
       </ThemeProvider>

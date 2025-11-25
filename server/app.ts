@@ -6,6 +6,7 @@ import express, {
   Response,
   NextFunction,
 } from "express";
+import session from "express-session";
 
 import { registerRoutes } from "./routes";
 import { marketDataGenerator } from "./services/market-data-generator";
@@ -22,6 +23,14 @@ export function log(message: string, source = "express") {
 }
 
 export const app = express();
+
+declare global {
+  namespace Express {
+    interface Request {
+      session?: session.Session & Partial<{ userId: string; userRole: string }>;
+    }
+  }
+}
 
 declare module 'http' {
   interface IncomingMessage {
