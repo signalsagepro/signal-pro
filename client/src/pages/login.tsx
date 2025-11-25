@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
@@ -10,17 +10,25 @@ export default function Login() {
   const [, navigate] = useLocation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const { login, loginPending, loginError } = useAuth();
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const { user, login, loginPending, loginError } = useAuth();
   const { toast } = useToast();
+
+  useEffect(() => {
+    if (user && isLoggingIn) {
+      toast({ title: "Login successful", description: "Welcome back!" });
+      navigate("/");
+      setIsLoggingIn(false);
+    }
+  }, [user, isLoggingIn, navigate, toast]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsLoggingIn(true);
     const success = await login({ email, password });
-    if (success) {
-      toast({ title: "Login successful", description: "Welcome back!" });
-      setTimeout(() => navigate("/"), 100);
-    } else {
+    if (!success) {
       toast({ title: "Login failed", description: "Invalid email or password", variant: "destructive" });
+      setIsLoggingIn(false);
     }
   };
 
