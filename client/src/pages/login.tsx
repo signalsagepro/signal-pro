@@ -13,20 +13,15 @@ export default function Login() {
   const { login, loginPending, loginError } = useAuth();
   const { toast } = useToast();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    login(
-      { email, password },
-      {
-        onSuccess: () => {
-          toast({ title: "Login successful", description: "Welcome back!" });
-          navigate("/");
-        },
-        onError: () => {
-          toast({ title: "Login failed", description: "Invalid email or password", variant: "destructive" });
-        },
-      }
-    );
+    const success = await login({ email, password });
+    if (success) {
+      toast({ title: "Login successful", description: "Welcome back!" });
+      navigate("/");
+    } else {
+      toast({ title: "Login failed", description: "Invalid email or password", variant: "destructive" });
+    }
   };
 
   return (

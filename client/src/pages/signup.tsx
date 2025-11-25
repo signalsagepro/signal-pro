@@ -14,20 +14,15 @@ export default function Signup() {
   const { signup, signupPending, signupError } = useAuth();
   const { toast } = useToast();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    signup(
-      { email, password, name },
-      {
-        onSuccess: () => {
-          toast({ title: "Signup successful", description: "Welcome to SignalPro!" });
-          navigate("/");
-        },
-        onError: () => {
-          toast({ title: "Signup failed", description: "Please try again", variant: "destructive" });
-        },
-      }
-    );
+    const success = await signup({ email, password, name });
+    if (success) {
+      toast({ title: "Signup successful", description: "Welcome to SignalPro!" });
+      navigate("/");
+    } else {
+      toast({ title: "Signup failed", description: "Please try again", variant: "destructive" });
+    }
   };
 
   return (

@@ -3,7 +3,7 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { type User } from "@shared/schema";
 
 export function useAuth() {
-  const { data: user, isLoading } = useQuery<User | null>({
+  const { data: user, isLoading, refetch } = useQuery<User | null>({
     queryKey: ["/api/auth/me"],
     queryFn: async () => {
       try {
@@ -19,36 +19,60 @@ export function useAuth() {
   const loginMutation = useMutation({
     mutationFn: (data: { email: string; password: string }) =>
       apiRequest("POST", "/api/auth/login", data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
-    },
   });
 
   const signupMutation = useMutation({
     mutationFn: (data: { email: string; password: string; name: string }) =>
       apiRequest("POST", "/api/auth/signup", data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
-    },
   });
 
   const logoutMutation = useMutation({
     mutationFn: () => apiRequest("POST", "/api/auth/logout", {}),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
-    },
   });
+
+  const login = async (data: { email: string; password: string }) => {
+    try {
+      await loginMutation.mutateAsync(data);
+      await refetch();
+      return true;
+    } catch (error) {
+      console.error("Login error:", error);
+      return false;
+    }
+  };
+
+  const signup = async (data: { email: string; password: string; name: string }) => {
+    try {
+      await signupMutation.mutateAsync(data);
+      await refetch();
+      return true;
+    } catch (error) {
+      console.error("Signup error:", error);
+      return false;
+    }
+  };
+
+  const logout = async () => {
+    try {
+      await logoutMutation.mutateAsync();
+      await refetch();
+      return true;
+    } catch (error) {
+      console.error("Logout error:", error);
+      return false;
+    }
+  };
 
   return {
     user,
     isLoading,
-    login: loginMutation.mutate,
+    login,
     loginError: loginMutation.error,
     loginPending: loginMutation.isPending,
-    signup: signupMutation.mutate,
+    signup,
     signupError: signupMutation.error,
     signupPending: signupMutation.isPending,
-    logout: logoutMutation.mutate,
+    logout,
     logoutPending: logoutMutation.isPending,
   };
 }
