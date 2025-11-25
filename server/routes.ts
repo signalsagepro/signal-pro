@@ -5,15 +5,6 @@ import { storage } from "./storage";
 import { z } from "zod";
 import { insertAssetSchema, insertStrategySchema, insertSignalSchema, insertUserSchema } from "@shared/schema";
 import { marketDataGenerator } from "./services/market-data-generator";
-import session from "express-session";
-
-declare global {
-  namespace Express {
-    interface Request {
-      session?: session.Session & Partial<{ userId: string; userRole: string }>;
-    }
-  }
-}
 
 const clients = new Set<WebSocket>();
 

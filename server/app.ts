@@ -24,11 +24,10 @@ export function log(message: string, source = "express") {
 
 export const app = express();
 
-declare global {
-  namespace Express {
-    interface Request {
-      session?: session.Session & Partial<{ userId: string; userRole: string }>;
-    }
+declare module "express-session" {
+  interface SessionData {
+    userId?: string;
+    userRole?: string;
   }
 }
 
