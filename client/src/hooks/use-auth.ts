@@ -18,7 +18,7 @@ export function useAuth() {
       }
     },
     staleTime: 0,
-    gcTime: 0,
+    gcTime: 300000,
   });
 
   const loginMutation = useMutation({
