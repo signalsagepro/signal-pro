@@ -212,6 +212,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/strategies", async (req, res) => {
     try {
+      if (!req.session?.userId) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
+      if (req.session.userRole !== "admin") {
+        res.status(403).json({ error: "Forbidden - admin access required" });
+        return;
+      }
       const data = insertStrategySchema.parse(req.body);
       const strategy = await storage.createStrategy(data);
       res.status(201).json(strategy);
@@ -226,6 +234,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.patch("/api/strategies/:id", async (req, res) => {
     try {
+      if (!req.session?.userId) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
+      if (req.session.userRole !== "admin") {
+        res.status(403).json({ error: "Forbidden - admin access required" });
+        return;
+      }
       const { id } = req.params;
       const strategy = await storage.updateStrategy(id, req.body);
       if (!strategy) {
@@ -240,6 +256,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/strategies/:id", async (req, res) => {
     try {
+      if (!req.session?.userId) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
+      if (req.session.userRole !== "admin") {
+        res.status(403).json({ error: "Forbidden - admin access required" });
+        return;
+      }
       const { id } = req.params;
       const deleted = await storage.deleteStrategy(id);
       if (!deleted) {
@@ -254,6 +278,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/strategies/merge", async (req, res) => {
     try {
+      if (!req.session?.userId) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
+      if (req.session.userRole !== "admin") {
+        res.status(403).json({ error: "Forbidden - admin access required" });
+        return;
+      }
+      
       const { strategy1Id, strategy2Id, logic } = req.body;
       
       if (!strategy1Id || !strategy2Id || !logic) {

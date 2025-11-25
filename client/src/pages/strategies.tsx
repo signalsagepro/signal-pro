@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/use-auth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Strategy, InsertStrategy } from "@shared/schema";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -140,6 +141,8 @@ export default function Strategies() {
   const [selectedStrategies, setSelectedStrategies] = useState<string[]>([]);
   const [mergeLogic, setMergeLogic] = useState<"AND" | "OR">("AND");
   const { toast } = useToast();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
 
   const { data: strategies = [], isLoading } = useQuery<Strategy[]>({
     queryKey: ["/api/strategies"],
@@ -254,29 +257,31 @@ export default function Strategies() {
             Strategies
           </h1>
           <p className="text-sm text-muted-foreground">
-            Manage your trading signal strategies
+            {isAdmin ? "Manage your trading signal strategies" : "View active trading signal strategies"}
           </p>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          {!mergeMode && (
+        {isAdmin && (
+          <div className="flex items-center gap-2 flex-wrap">
+            {!mergeMode && (
+              <Button
+                variant="outline"
+                onClick={() => setMergeMode(true)}
+                disabled={strategies.length < 2}
+                data-testid="button-merge-strategies"
+              >
+                <Merge className="h-4 w-4 mr-2" />
+                Merge
+              </Button>
+            )}
             <Button
-              variant="outline"
-              onClick={() => setMergeMode(true)}
-              disabled={strategies.length < 2}
-              data-testid="button-merge-strategies"
+              onClick={() => setIsAddDialogOpen(true)}
+              data-testid="button-add-strategy"
             >
-              <Merge className="h-4 w-4 mr-2" />
-              Merge
+              <Plus className="h-4 w-4 mr-2" />
+              Add Strategy
             </Button>
-          )}
-          <Button
-            onClick={() => setIsAddDialogOpen(true)}
-            data-testid="button-add-strategy"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Add Strategy
-          </Button>
-        </div>
+          </div>
+        )}
       </div>
 
       {mergeMode && (
@@ -365,14 +370,16 @@ export default function Strategies() {
           <CardContent className="pt-12 pb-12">
             <div className="text-center">
               <TrendingUp className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-medium mb-2">No strategies yet</h3>
+              <h3 className="text-lg font-medium mb-2">{isAdmin ? "No strategies yet" : "No active strategies"}</h3>
               <p className="text-sm text-muted-foreground mb-6">
-                Get started by adding a preset strategy
+                {isAdmin ? "Get started by adding a preset strategy" : "Check back later for active strategies"}
               </p>
-              <Button onClick={() => setIsAddDialogOpen(true)} data-testid="button-add-first-strategy">
-                <Plus className="h-4 w-4 mr-2" />
-                Add Your First Strategy
-              </Button>
+              {isAdmin && (
+                <Button onClick={() => setIsAddDialogOpen(true)} data-testid="button-add-first-strategy">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Your First Strategy
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -435,14 +442,18 @@ export default function Strategies() {
                     )}
                   </div>
                   <div className="flex items-center gap-2">
-                    {mergeMode ? (
+                    {mergeMode && isAdmin ? (
                       <div className={`w-5 h-5 border-2 rounded ${selectedStrategies.includes(strategy.id) ? 'bg-chart-1 border-chart-1' : 'border-muted-foreground'}`} />
-                    ) : (
+                    ) : isAdmin ? (
                       <Switch
                         checked={strategy.enabled}
                         onCheckedChange={() => handleToggleStrategy(strategy)}
                         data-testid={`switch-strategy-${strategy.id}`}
                       />
+                    ) : (
+                      <Badge variant={strategy.enabled ? "default" : "secondary"}>
+                        {strategy.enabled ? "Active" : "Inactive"}
+                      </Badge>
                     )}
                   </div>
                 </CardHeader>
@@ -484,70 +495,74 @@ export default function Strategies() {
                     </CollapsibleContent>
                   </Collapsible>
                 </CardContent>
-                <CardFooter className="flex items-center gap-2 justify-end border-t pt-4">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      if (confirm("Are you sure you want to delete this strategy?")) {
-                        deleteMutation.mutate(strategy.id);
-                      }
-                    }}
-                    data-testid={`button-delete-${strategy.id}`}
-                  >
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Delete
-                  </Button>
-                </CardFooter>
+                {isAdmin && (
+                  <CardFooter className="flex items-center gap-2 justify-end border-t pt-4">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        if (confirm("Are you sure you want to delete this strategy?")) {
+                          deleteMutation.mutate(strategy.id);
+                        }
+                      }}
+                      data-testid={`button-delete-${strategy.id}`}
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete
+                    </Button>
+                  </CardFooter>
+                )}
               </Card>
             );
           })}
         </div>
       )}
 
-      <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Add Strategy</DialogTitle>
-            <DialogDescription>
-              Select a preset strategy to add to your collection
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            {PRESET_STRATEGIES.map((preset) => {
-              const alreadyAdded = strategies.some((s) => s.type === preset.type);
-              
-              return (
-                <Card key={preset.type} className={alreadyAdded ? "opacity-50" : ""}>
-                  <CardHeader>
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1 space-y-2">
-                        <div className="flex items-center gap-2">
-                          <CardTitle className="text-sm">{preset.name}</CardTitle>
-                          <Badge variant="outline" className="text-xs">
-                            {preset.timeframe.toUpperCase()}
-                          </Badge>
+      {isAdmin && (
+        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Add Strategy</DialogTitle>
+              <DialogDescription>
+                Select a preset strategy to add to your collection
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              {PRESET_STRATEGIES.map((preset) => {
+                const alreadyAdded = strategies.some((s) => s.type === preset.type);
+                
+                return (
+                  <Card key={preset.type} className={alreadyAdded ? "opacity-50" : ""}>
+                    <CardHeader>
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 space-y-2">
+                          <div className="flex items-center gap-2">
+                            <CardTitle className="text-sm">{preset.name}</CardTitle>
+                            <Badge variant="outline" className="text-xs">
+                              {preset.timeframe.toUpperCase()}
+                            </Badge>
+                          </div>
+                          <CardDescription className="text-xs">
+                            {preset.description}
+                          </CardDescription>
                         </div>
-                        <CardDescription className="text-xs">
-                          {preset.description}
-                        </CardDescription>
+                        <Button
+                          size="sm"
+                          onClick={() => handleAddPreset(preset)}
+                          disabled={alreadyAdded || createMutation.isPending}
+                          data-testid={`button-add-preset-${preset.type}`}
+                        >
+                          {alreadyAdded ? "Added" : "Add"}
+                        </Button>
                       </div>
-                      <Button
-                        size="sm"
-                        onClick={() => handleAddPreset(preset)}
-                        disabled={alreadyAdded || createMutation.isPending}
-                        data-testid={`button-add-preset-${preset.type}`}
-                      >
-                        {alreadyAdded ? "Added" : "Add"}
-                      </Button>
-                    </div>
-                  </CardHeader>
-                </Card>
-              );
-            })}
-          </div>
-        </DialogContent>
-      </Dialog>
+                    </CardHeader>
+                  </Card>
+                );
+              })}
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
