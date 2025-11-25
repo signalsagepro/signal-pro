@@ -29,6 +29,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         req.session.userId = user.id;
         req.session.userRole = user.role;
       }
+      res.set("Cache-Control", "no-cache, no-store, must-revalidate");
       res.json({ user: { id: user.id, email: user.email, name: user.name, role: user.role } });
     } catch (error) {
       res.status(500).json({ error: "Login failed" });
@@ -59,6 +60,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.post("/api/auth/logout", async (req: Request, res: Response) => {
+    res.set("Cache-Control", "no-cache, no-store, must-revalidate");
     if (req.session) {
       req.session.destroy((err: Error | null) => {
         if (err) {
@@ -74,6 +76,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/auth/me", async (req: Request, res: Response) => {
     try {
+      res.set("Cache-Control", "no-cache, no-store, must-revalidate");
+      res.set("Pragma", "no-cache");
+      res.set("Expires", "0");
       if (!req.session?.userId) {
         res.json(null);
         return;

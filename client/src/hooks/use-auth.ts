@@ -7,13 +7,18 @@ export function useAuth() {
     queryKey: ["/api/auth/me"],
     queryFn: async () => {
       try {
-        const response = await fetch("/api/auth/me");
+        const response = await fetch("/api/auth/me", {
+          cache: "no-store",
+          headers: { "Cache-Control": "no-cache" }
+        });
         if (response.ok) return response.json();
         return null;
       } catch {
         return null;
       }
     },
+    staleTime: 0,
+    gcTime: 0,
   });
 
   const loginMutation = useMutation({
