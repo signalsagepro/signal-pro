@@ -38,8 +38,9 @@ export function useAuth() {
   const login = async (data: { email: string; password: string }) => {
     try {
       await loginMutation.mutateAsync(data);
-      await refetch();
-      return true;
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+      const result = await refetch();
+      return !!result.data;
     } catch (error) {
       console.error("Login error:", error);
       return false;

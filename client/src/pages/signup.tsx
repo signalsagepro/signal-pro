@@ -19,7 +19,7 @@ export default function Signup() {
     const success = await signup({ email, password, name });
     if (success) {
       toast({ title: "Signup successful", description: "Welcome to SignalPro!" });
-      navigate("/");
+      setTimeout(() => navigate("/"), 100);
     } else {
       toast({ title: "Signup failed", description: "Please try again", variant: "destructive" });
     }

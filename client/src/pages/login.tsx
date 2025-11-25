@@ -18,7 +18,7 @@ export default function Login() {
     const success = await login({ email, password });
     if (success) {
       toast({ title: "Login successful", description: "Welcome back!" });
-      navigate("/");
+      setTimeout(() => navigate("/"), 100);
     } else {
       toast({ title: "Login failed", description: "Invalid email or password", variant: "destructive" });
     }
