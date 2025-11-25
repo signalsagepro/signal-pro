@@ -11,8 +11,11 @@ import {
   type InsertNotificationConfig,
   type CandleData,
   type InsertCandleData,
+  type User,
+  type InsertUser,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
+import { hashPassword, verifyPassword } from "./auth";
 
 export interface IStorage {
   getAssets(): Promise<Asset[]>;
@@ -47,6 +50,11 @@ export interface IStorage {
 
   getCandleData(assetId: string, timeframe: string): Promise<CandleData[]>;
   createCandleData(candle: InsertCandleData): Promise<CandleData>;
+
+  getUsers(): Promise<User[]>;
+  getUserByEmail(email: string): Promise<User | undefined>;
+  createUser(user: InsertUser): Promise<User>;
+  verifyUserPassword(email: string, password: string): Promise<User | undefined>;
 }
 
 export class MemStorage implements IStorage {
@@ -56,6 +64,7 @@ export class MemStorage implements IStorage {
   private brokerConfigs: Map<string, BrokerConfig>;
   private notificationConfigs: Map<string, NotificationConfig>;
   private candleData: Map<string, CandleData>;
+  private users: Map<string, User>;
 
   constructor() {
     this.assets = new Map();
@@ -64,6 +73,7 @@ export class MemStorage implements IStorage {
     this.brokerConfigs = new Map();
     this.notificationConfigs = new Map();
     this.candleData = new Map();
+    this.users = new Map();
 
     this.initializeDefaultData();
   }
@@ -399,6 +409,35 @@ export class MemStorage implements IStorage {
     };
     this.candleData.set(id, candle);
     return candle;
+  }
+
+  async getUsers(): Promise<User[]> {
+    return Array.from(this.users.values());
+  }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    return Array.from(this.users.values()).find(u => u.email === email);
+  }
+
+  async createUser(insertUser: InsertUser): Promise<User> {
+    const id = randomUUID();
+    const hashedPassword = await hashPassword(insertUser.password);
+    const user: User = {
+      ...insertUser,
+      id,
+      password: hashedPassword,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.users.set(id, user);
+    return user;
+  }
+
+  async verifyUserPassword(email: string, password: string): Promise<User | undefined> {
+    const user = await this.getUserByEmail(email);
+    if (!user) return undefined;
+    const isValid = await verifyPassword(password, user.password);
+    return isValid ? user : undefined;
   }
 }
 
