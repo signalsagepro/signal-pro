@@ -94,6 +94,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/users", async (req: Request, res: Response) => {
+    try {
+      if (!req.session?.userId) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
+      const user = await storage.getUser(req.session.userId);
+      if (!user || user.role !== "admin") {
+        res.status(403).json({ error: "Forbidden" });
+        return;
+      }
+      const users = await storage.getUsers();
+      res.json(users.map((u) => ({
+        id: u.id,
+        email: u.email,
+        name: u.name,
+        role: u.role,
+      })));
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch users" });
+    }
+  });
+
+  app.post("/api/users", async (req: Request, res: Response) => {
+    try {
+      if (!req.session?.userId) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
+      const user = await storage.getUser(req.session.userId);
+      if (!user || user.role !== "admin") {
+        res.status(403).json({ error: "Forbidden" });
+        return;
+      }
+      const data = insertUserSchema.parse(req.body);
+      const existing = await storage.getUserByEmail(data.email);
+      if (existing) {
+        res.status(400).json({ error: "Email already exists" });
+        return;
+      }
+      const newUser = await storage.createUser(data);
+      res.status(201).json({
+        id: newUser.id,
+        email: newUser.email,
+        name: newUser.name,
+        role: newUser.role,
+      });
+    } catch (error: unknown) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: "Validation error", details: error.errors });
+      } else {
+        res.status(500).json({ error: "Failed to create user" });
+      }
+    }
+  });
+
   app.get("/api/assets", async (req, res) => {
     try {
       const assets = await storage.getAssets();

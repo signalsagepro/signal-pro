@@ -1,4 +1,4 @@
-import { LayoutDashboard, TrendingUp, Layers, Bell, Settings, Code2, Signal, LogOut } from "lucide-react";
+import { LayoutDashboard, TrendingUp, Layers, Bell, Settings, Code2, Signal, LogOut, Users as UsersIcon } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import {
   Sidebar,
@@ -60,6 +60,15 @@ const configNavItems = [
     url: "/config/notifications",
     icon: Bell,
     testId: "link-config-notifications",
+  },
+];
+
+const adminNavItems = [
+  {
+    title: "Users",
+    url: "/users",
+    icon: UsersIcon,
+    testId: "link-users",
   },
 ];
 
@@ -129,6 +138,30 @@ export function AppSidebar({ devMode, onLogoClick }: AppSidebarProps) {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        {user?.role === "admin" && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Administration</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {adminNavItems.map((item) => (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={location === item.url}
+                      data-testid={item.testId}
+                    >
+                      <Link href={item.url}>
+                        <item.icon className="h-4 w-4" />
+                        <span>{item.title}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
 
         {devMode && (
           <SidebarGroup>

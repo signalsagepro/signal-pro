@@ -18,6 +18,7 @@ import Assets from "@/pages/assets";
 import Signals from "@/pages/signals";
 import ConfigBrokers from "@/pages/config-brokers";
 import ConfigNotifications from "@/pages/config-notifications";
+import Users from "@/pages/users";
 import DevStrategyBuilder from "@/pages/dev-strategy-builder";
 
 function Router({ devMode }: { devMode: boolean }) {
@@ -29,6 +30,7 @@ function Router({ devMode }: { devMode: boolean }) {
       <Route path="/signals" component={Signals} />
       <Route path="/config/brokers" component={ConfigBrokers} />
       <Route path="/config/notifications" component={ConfigNotifications} />
+      <Route path="/users" component={Users} />
       {devMode && <Route path="/dev/strategy-builder" component={DevStrategyBuilder} />}
       <Route component={NotFound} />
     </Switch>
