@@ -35,7 +35,7 @@ function Router({ devMode }: { devMode: boolean }) {
   );
 }
 
-function AuthChecker() {
+function AuthGuard() {
   const { user, isLoading } = useAuth();
   const [, navigate] = useLocation();
 
@@ -53,14 +53,13 @@ function AuthChecker() {
     return null;
   }
 
-  return null;
+  return <ProtectedLayout />;
 }
 
-function AppContent() {
+function ProtectedLayout() {
   const [devMode, setDevMode] = useState(false);
   const [logoClickCount, setLogoClickCount] = useState(0);
   const [lastClickTime, setLastClickTime] = useState(0);
-  const { user, isLoading } = useAuth();
 
   const handleLogoClick = () => {
     const now = Date.now();
@@ -84,14 +83,6 @@ function AppContent() {
     "--sidebar-width": "17rem",
     "--sidebar-width-icon": "4rem",
   };
-
-  if (isLoading) {
-    return <div className="flex items-center justify-center h-screen">Loading...</div>;
-  }
-
-  if (!user) {
-    return null;
-  }
 
   return (
     <SidebarProvider style={style as React.CSSProperties}>
@@ -119,10 +110,7 @@ function App() {
           <Switch>
             <Route path="/login" component={Login} />
             <Route path="/signup" component={Signup} />
-            <Route>
-              <AuthChecker />
-              <AppContent />
-            </Route>
+            <Route component={AuthGuard} />
           </Switch>
           <Toaster />
         </TooltipProvider>
