@@ -11,9 +11,14 @@ import runApp from "./app";
 
 export async function setupVite(app: Express, server: Server) {
   const viteLogger = createLogger();
+  const port = parseInt(process.env.PORT || '5000', 10);
   const serverOptions = {
     middlewareMode: true,
-    hmr: { server },
+    hmr: {
+      host: 'localhost',
+      port: port,
+      protocol: 'wss',
+    },
     allowedHosts: true as const,
   };
 

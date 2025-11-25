@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Plus, TrendingUp, Edit, Trash2, ChevronDown, ChevronUp, Merge } from "lucide-react";
+import { Plus, TrendingUp, Edit, Trash2, ChevronDown, ChevronUp, Merge, Info } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
@@ -14,6 +14,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -97,6 +102,33 @@ const PRESET_STRATEGIES = [
     },
   },
 ];
+
+const STRATEGY_FORMULAS = {
+  "15m_above_50_bullish": {
+    formula: "Price > EMA50 AND EMA50 > EMA200",
+    example: "Price: $100 | EMA50: $99 | EMA200: $98 ✓ Signal fires",
+  },
+  "5m_above_200_reversal": {
+    formula: "Price >= EMA200 AND EMA200 > EMA50",
+    example: "Price: $100 | EMA200: $99 | EMA50: $98 ✓ Signal fires",
+  },
+  "5m_pullback_to_200": {
+    formula: "Price >= EMA200 AND EMA50 > EMA200 AND Price > EMA50",
+    example: "Price touches 200EMA | EMA50 > EMA200 | Price recovers above EMA50",
+  },
+  "5m_below_200_bearish": {
+    formula: "Price <= EMA200 AND EMA50 > EMA200",
+    example: "Price: $98 | EMA200: $99 | EMA50: $100 ✓ Signal fires",
+  },
+  "5m_touch_200_downtrend": {
+    formula: "EMA200 > EMA50 > Price AND Price touches EMA200",
+    example: "EMA200: $100 | EMA50: $99 | Price: $98.5 touches $100",
+  },
+  "15m_below_200_breakdown": {
+    formula: "Price <= EMA200 AND EMA50 > EMA200 > Price",
+    example: "Price: $97 | EMA200: $99 | EMA50: $100 ✓ Signal fires",
+  },
+};
 
 export default function Strategies() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -363,6 +395,35 @@ export default function Strategies() {
                         <Badge variant="secondary" className="text-xs">
                           Custom
                         </Badge>
+                      )}
+                      {!strategy.isCustom && STRATEGY_FORMULAS[strategy.type as keyof typeof STRATEGY_FORMULAS] && (
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <button 
+                              className="p-1 hover:bg-muted rounded transition-colors"
+                              onClick={(e) => e.stopPropagation()}
+                              data-testid={`button-info-${strategy.id}`}
+                            >
+                              <Info className="h-4 w-4 text-muted-foreground" />
+                            </button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-80 text-sm">
+                            <div className="space-y-3">
+                              <div>
+                                <h4 className="font-semibold mb-2">Formula</h4>
+                                <code className="block bg-muted p-2 rounded text-xs font-mono break-words">
+                                  {STRATEGY_FORMULAS[strategy.type as keyof typeof STRATEGY_FORMULAS]?.formula}
+                                </code>
+                              </div>
+                              <div>
+                                <h4 className="font-semibold mb-2">Example</h4>
+                                <div className="bg-muted p-2 rounded text-xs">
+                                  {STRATEGY_FORMULAS[strategy.type as keyof typeof STRATEGY_FORMULAS]?.example}
+                                </div>
+                              </div>
+                            </div>
+                          </PopoverContent>
+                        </Popover>
                       )}
                     </div>
                     {strategy.description && (
