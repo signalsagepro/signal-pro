@@ -49,7 +49,7 @@ import {
 const assetFormSchema = z.object({
   symbol: z.string().min(1, "Symbol is required").toUpperCase(),
   name: z.string().min(1, "Name is required"),
-  type: z.enum(["indian_stock", "forex"]),
+  type: z.enum(["indian_stock", "indian_futures", "forex"]),
   exchange: z.string().optional(),
   enabled: z.boolean().default(true),
 });
@@ -68,7 +68,7 @@ export default function Assets() {
       symbol: "",
       name: "",
       type: "indian_stock",
-      exchange: "",
+      exchange: "NSE",
       enabled: true,
     },
   });
@@ -142,9 +142,21 @@ export default function Assets() {
   const stats = {
     total: assets.length,
     enabled: assets.filter((a) => a.enabled).length,
-    indianStocks: assets.filter((a) => a.type === "indian_stock").length,
+    indianMarket: assets.filter((a) => a.type === "indian_stock" || a.type === "indian_futures").length,
     forex: assets.filter((a) => a.type === "forex").length,
   };
+
+  const indianMarketAssets = assets.filter(
+    (a) => a.type === "indian_stock" || a.type === "indian_futures"
+  ).filter((a) =>
+    a.symbol.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    a.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const forexAssets = assets.filter((a) => a.type === "forex").filter((a) =>
+    a.symbol.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    a.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
     <div className="space-y-6">
@@ -194,12 +206,12 @@ export default function Assets() {
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Indian Stocks
+              Indian Market
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-mono font-semibold" data-testid="stat-indian-stocks">
-              {stats.indianStocks}
+            <div className="text-2xl font-mono font-semibold" data-testid="stat-indian-market">
+              {stats.indianMarket}
             </div>
           </CardContent>
         </Card>
@@ -217,113 +229,182 @@ export default function Assets() {
         </Card>
       </div>
 
-      <Card>
-        <CardHeader>
-          <div className="flex items-center gap-4 flex-wrap">
-            <div className="relative flex-1 min-w-[200px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search assets..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9"
-                data-testid="input-search-assets"
-              />
-            </div>
-            <Select value={typeFilter} onValueChange={setTypeFilter}>
-              <SelectTrigger className="w-[180px]" data-testid="select-type-filter">
-                <SelectValue placeholder="Filter by type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Types</SelectItem>
-                <SelectItem value="indian_stock">Indian Stocks</SelectItem>
-                <SelectItem value="forex">Forex</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="space-y-3">
-              {[...Array(5)].map((_, i) => (
-                <Skeleton key={i} className="h-12 w-full" />
-              ))}
-            </div>
-          ) : filteredAssets.length === 0 ? (
-            <div className="text-center py-12">
+      <div className="relative flex-1 min-w-[200px] mb-6">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Search all assets..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="pl-9"
+          data-testid="input-search-assets"
+        />
+      </div>
+
+      {isLoading ? (
+        <div className="space-y-3">
+          {[...Array(5)].map((_, i) => (
+            <Skeleton key={i} className="h-12 w-full" />
+          ))}
+        </div>
+      ) : assets.length === 0 ? (
+        <Card>
+          <CardContent className="pt-12 pb-12">
+            <div className="text-center">
               <Layers className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-medium mb-2">
-                {assets.length === 0 ? "No assets yet" : "No matching assets"}
-              </h3>
+              <h3 className="text-lg font-medium mb-2">No assets yet</h3>
               <p className="text-sm text-muted-foreground mb-6">
-                {assets.length === 0
-                  ? "Add your first asset to start tracking signals"
-                  : "Try adjusting your search or filters"}
+                Add your first asset to start tracking signals
               </p>
-              {assets.length === 0 && (
-                <Button onClick={() => setIsAddDialogOpen(true)} data-testid="button-add-first-asset">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Your First Asset
-                </Button>
-              )}
+              <Button onClick={() => setIsAddDialogOpen(true)} data-testid="button-add-first-asset">
+                <Plus className="h-4 w-4 mr-2" />
+                Add Your First Asset
+              </Button>
             </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Symbol</TableHead>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Exchange</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredAssets.map((asset) => (
-                    <TableRow key={asset.id} data-testid={`asset-row-${asset.id}`}>
-                      <TableCell className="font-mono font-semibold">
-                        {asset.symbol}
-                      </TableCell>
-                      <TableCell>{asset.name}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="text-xs">
-                          {asset.type === "indian_stock" ? "Indian Stock" : "Forex"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground text-sm">
-                        {asset.exchange || "—"}
-                      </TableCell>
-                      <TableCell>
-                        <Switch
-                          checked={asset.enabled}
-                          onCheckedChange={() => handleToggleAsset(asset)}
-                          data-testid={`switch-asset-${asset.id}`}
-                        />
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            if (confirm("Are you sure you want to delete this asset?")) {
-                              deleteMutation.mutate(asset.id);
-                            }
-                          }}
-                          data-testid={`button-delete-asset-${asset.id}`}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-6">
+          {indianMarketAssets.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Indian Market</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Symbol</TableHead>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Type</TableHead>
+                        <TableHead>Exchange</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {indianMarketAssets.map((asset) => (
+                        <TableRow key={asset.id} data-testid={`asset-row-${asset.id}`}>
+                          <TableCell className="font-mono font-semibold">
+                            {asset.symbol}
+                          </TableCell>
+                          <TableCell>{asset.name}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="text-xs">
+                              {asset.type === "indian_stock" ? "Stock" : "Futures"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-muted-foreground text-sm">
+                            {asset.exchange || "—"}
+                          </TableCell>
+                          <TableCell>
+                            <Switch
+                              checked={asset.enabled}
+                              onCheckedChange={() => handleToggleAsset(asset)}
+                              data-testid={`switch-asset-${asset.id}`}
+                            />
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                if (confirm("Are you sure you want to delete this asset?")) {
+                                  deleteMutation.mutate(asset.id);
+                                }
+                              }}
+                              data-testid={`button-delete-asset-${asset.id}`}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
           )}
-        </CardContent>
-      </Card>
+
+          {forexAssets.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Forex</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Symbol</TableHead>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Type</TableHead>
+                        <TableHead>Exchange</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {forexAssets.map((asset) => (
+                        <TableRow key={asset.id} data-testid={`asset-row-${asset.id}`}>
+                          <TableCell className="font-mono font-semibold">
+                            {asset.symbol}
+                          </TableCell>
+                          <TableCell>{asset.name}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="text-xs">
+                              Forex
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-muted-foreground text-sm">
+                            {asset.exchange || "—"}
+                          </TableCell>
+                          <TableCell>
+                            <Switch
+                              checked={asset.enabled}
+                              onCheckedChange={() => handleToggleAsset(asset)}
+                              data-testid={`switch-asset-${asset.id}`}
+                            />
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                if (confirm("Are you sure you want to delete this asset?")) {
+                                  deleteMutation.mutate(asset.id);
+                                }
+                              }}
+                              data-testid={`button-delete-asset-${asset.id}`}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {indianMarketAssets.length === 0 && forexAssets.length === 0 && (
+            <Card>
+              <CardContent className="pt-12 pb-12">
+                <div className="text-center">
+                  <Layers className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <h3 className="text-lg font-medium mb-2">No matching assets</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Try adjusting your search
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
 
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
         <DialogContent>
@@ -383,6 +464,7 @@ export default function Assets() {
                       </FormControl>
                       <SelectContent>
                         <SelectItem value="indian_stock">Indian Stock</SelectItem>
+                        <SelectItem value="indian_futures">Indian Futures</SelectItem>
                         <SelectItem value="forex">Forex</SelectItem>
                       </SelectContent>
                     </Select>
