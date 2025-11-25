@@ -37,22 +37,32 @@ export function useAuth() {
 
   const login = async (data: { email: string; password: string }) => {
     try {
-      await loginMutation.mutateAsync(data);
+      console.log("🔐 [AUTH] Starting login with email:", data.email);
+      const loginResult = await loginMutation.mutateAsync(data);
+      console.log("🔐 [AUTH] Login mutation completed:", loginResult);
+      
       // Wait a tiny bit to ensure session is set on server
       await new Promise(resolve => setTimeout(resolve, 100));
+      console.log("🔐 [AUTH] Waited 100ms, now fetching /api/auth/me");
+      
       // Manually fetch and set the user in cache
       const response = await fetch("/api/auth/me", {
         cache: "no-store",
         headers: { "Cache-Control": "no-cache" }
       });
+      console.log("🔐 [AUTH] /api/auth/me response status:", response.status);
+      
       if (response.ok) {
         const userData = await response.json();
+        console.log("🔐 [AUTH] Got user data:", userData);
         queryClient.setQueryData(["/api/auth/me"], userData);
+        console.log("🔐 [AUTH] Set query data in cache, returning true");
         return true;
       }
+      console.log("🔐 [AUTH] Response not OK, returning false");
       return false;
     } catch (error) {
-      console.error("Login error:", error);
+      console.error("🔐 [AUTH] Login error:", error);
       return false;
     }
   };

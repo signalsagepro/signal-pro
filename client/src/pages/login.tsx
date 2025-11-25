@@ -15,7 +15,9 @@ export default function Login() {
   const { toast } = useToast();
 
   useEffect(() => {
+    console.log("🔐 [LOGIN PAGE] useEffect triggered - user:", user, "isLoggingIn:", isLoggingIn);
     if (user && isLoggingIn) {
+      console.log("🔐 [LOGIN PAGE] User logged in and isLoggingIn=true, navigating to /");
       toast({ title: "Login successful", description: "Welcome back!" });
       navigate("/");
       setIsLoggingIn(false);
@@ -24,11 +26,16 @@ export default function Login() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log("🔐 [LOGIN PAGE] Form submitted, calling login function");
     setIsLoggingIn(true);
     const success = await login({ email, password });
+    console.log("🔐 [LOGIN PAGE] Login function returned:", success);
     if (!success) {
+      console.log("🔐 [LOGIN PAGE] Login failed, showing error toast");
       toast({ title: "Login failed", description: "Invalid email or password", variant: "destructive" });
       setIsLoggingIn(false);
+    } else {
+      console.log("🔐 [LOGIN PAGE] Login succeeded, waiting for useEffect to trigger");
     }
   };
 
