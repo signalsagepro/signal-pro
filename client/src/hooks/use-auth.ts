@@ -39,8 +39,8 @@ export function useAuth() {
     try {
       await loginMutation.mutateAsync(data);
       queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
-      const result = await refetch();
-      return !!result.data;
+      await refetch();
+      return true;
     } catch (error) {
       console.error("Login error:", error);
       return false;
@@ -50,6 +50,7 @@ export function useAuth() {
   const signup = async (data: { email: string; password: string; name: string }) => {
     try {
       await signupMutation.mutateAsync(data);
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
       await refetch();
       return true;
     } catch (error) {
@@ -61,6 +62,7 @@ export function useAuth() {
   const logout = async () => {
     try {
       await logoutMutation.mutateAsync();
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
       await refetch();
       return true;
     } catch (error) {
