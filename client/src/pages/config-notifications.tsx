@@ -54,6 +54,16 @@ const NOTIFICATION_CHANNELS = [
       { key: "webhookUrl", label: "Discord Webhook URL", type: "url", placeholder: "https://discord.com/api/webhooks/..." },
     ],
   },
+  {
+    channel: "telegram",
+    name: "Telegram",
+    icon: MessageSquare,
+    description: "Get signal notifications via Telegram",
+    fields: [
+      { key: "botToken", label: "Bot Token", type: "password", placeholder: "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11" },
+      { key: "chatId", label: "Chat ID", type: "text", placeholder: "123456789" },
+    ],
+  },
 ];
 
 interface NotificationCardState {

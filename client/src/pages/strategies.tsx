@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Plus, TrendingUp, Edit, Trash2, ChevronDown, ChevronUp } from "lucide-react";
+import { Plus, TrendingUp, Edit, Trash2, ChevronDown, ChevronUp, Merge } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
@@ -102,6 +102,9 @@ export default function Strategies() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [editingStrategy, setEditingStrategy] = useState<Strategy | null>(null);
   const [expandedStrategies, setExpandedStrategies] = useState<Set<string>>(new Set());
+  const [mergeMode, setMergeMode] = useState(false);
+  const [selectedStrategies, setSelectedStrategies] = useState<string[]>([]);
+  const [mergeLogic, setMergeLogic] = useState<"AND" | "OR">("AND");
   const { toast } = useToast();
 
   const { data: strategies = [], isLoading } = useQuery<Strategy[]>({
@@ -143,6 +146,20 @@ export default function Strategies() {
     },
   });
 
+  const mergeMutation = useMutation({
+    mutationFn: ({ strategy1Id, strategy2Id, logic }: { strategy1Id: string; strategy2Id: string; logic: "AND" | "OR" }) =>
+      apiRequest("POST", "/api/strategies/merge", { strategy1Id, strategy2Id, logic }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/strategies"] });
+      setMergeMode(false);
+      setSelectedStrategies([]);
+      toast({
+        title: "Strategies merged",
+        description: "A new merged strategy has been created.",
+      });
+    },
+  });
+
   const handleToggleStrategy = (strategy: Strategy) => {
     updateMutation.mutate({
       id: strategy.id,
@@ -174,6 +191,27 @@ export default function Strategies() {
     });
   };
 
+  const toggleStrategySelection = (id: string) => {
+    setSelectedStrategies((prev) => {
+      if (prev.includes(id)) {
+        return prev.filter((s) => s !== id);
+      } else if (prev.length < 2) {
+        return [...prev, id];
+      }
+      return prev;
+    });
+  };
+
+  const handleMerge = () => {
+    if (selectedStrategies.length === 2) {
+      mergeMutation.mutate({
+        strategy1Id: selectedStrategies[0],
+        strategy2Id: selectedStrategies[1],
+        logic: mergeLogic,
+      });
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-4">
@@ -185,14 +223,97 @@ export default function Strategies() {
             Manage your trading signal strategies
           </p>
         </div>
-        <Button
-          onClick={() => setIsAddDialogOpen(true)}
-          data-testid="button-add-strategy"
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Add Strategy
-        </Button>
+        <div className="flex items-center gap-2 flex-wrap">
+          {!mergeMode && (
+            <Button
+              variant="outline"
+              onClick={() => setMergeMode(true)}
+              disabled={strategies.length < 2}
+              data-testid="button-merge-strategies"
+            >
+              <Merge className="h-4 w-4 mr-2" />
+              Merge
+            </Button>
+          )}
+          <Button
+            onClick={() => setIsAddDialogOpen(true)}
+            data-testid="button-add-strategy"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Add Strategy
+          </Button>
+        </div>
       </div>
+
+      {mergeMode && (
+        <Card className="border-chart-2">
+          <CardHeader>
+            <CardTitle className="text-base">Merge Strategies</CardTitle>
+            <CardDescription>Select 2 strategies to merge with AND/OR logic</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {strategies.map((strategy) => (
+                <Card
+                  key={strategy.id}
+                  className={`cursor-pointer transition-all ${
+                    selectedStrategies.includes(strategy.id)
+                      ? "ring-2 ring-chart-1 bg-muted"
+                      : "hover-elevate"
+                  }`}
+                  onClick={() => toggleStrategySelection(strategy.id)}
+                  data-testid={`card-merge-${strategy.id}`}
+                >
+                  <CardHeader>
+                    <CardTitle className="text-sm">{strategy.name}</CardTitle>
+                  </CardHeader>
+                </Card>
+              ))}
+            </div>
+            {selectedStrategies.length === 2 && (
+              <div className="flex items-center gap-4">
+                <Button
+                  size="sm"
+                  variant={mergeLogic === "AND" ? "default" : "outline"}
+                  onClick={() => setMergeLogic("AND")}
+                  className="flex-1"
+                  data-testid="button-logic-and"
+                >
+                  AND
+                </Button>
+                <Button
+                  size="sm"
+                  variant={mergeLogic === "OR" ? "default" : "outline"}
+                  onClick={() => setMergeLogic("OR")}
+                  className="flex-1"
+                  data-testid="button-logic-or"
+                >
+                  OR
+                </Button>
+              </div>
+            )}
+          </CardContent>
+          <CardFooter className="flex gap-2 justify-end border-t pt-4">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setMergeMode(false);
+                setSelectedStrategies([]);
+              }}
+              data-testid="button-cancel-merge"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleMerge}
+              disabled={selectedStrategies.length !== 2 || mergeMutation.isPending}
+              data-testid="button-confirm-merge"
+            >
+              {mergeMutation.isPending ? "Merging..." : "Merge"}
+            </Button>
+          </CardFooter>
+        </Card>
+      )}
 
       {isLoading ? (
         <div className="space-y-4">
@@ -227,9 +348,12 @@ export default function Strategies() {
             const isExpanded = expandedStrategies.has(strategy.id);
             
             return (
-              <Card key={strategy.id} data-testid={`strategy-${strategy.id}`}>
+              <Card key={strategy.id} data-testid={`strategy-${strategy.id}`} className={mergeMode ? "cursor-pointer" : ""}>
                 <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
-                  <div className="flex-1 space-y-2">
+                  <div 
+                    className="flex-1 space-y-2"
+                    onClick={mergeMode ? () => toggleStrategySelection(strategy.id) : undefined}
+                  >
                     <div className="flex items-center gap-2 flex-wrap">
                       <CardTitle className="text-base">{strategy.name}</CardTitle>
                       <Badge variant="outline" className="text-xs">
@@ -248,11 +372,15 @@ export default function Strategies() {
                     )}
                   </div>
                   <div className="flex items-center gap-2">
-                    <Switch
-                      checked={strategy.enabled}
-                      onCheckedChange={() => handleToggleStrategy(strategy)}
-                      data-testid={`switch-strategy-${strategy.id}`}
-                    />
+                    {mergeMode ? (
+                      <div className={`w-5 h-5 border-2 rounded ${selectedStrategies.includes(strategy.id) ? 'bg-chart-1 border-chart-1' : 'border-muted-foreground'}`} />
+                    ) : (
+                      <Switch
+                        checked={strategy.enabled}
+                        onCheckedChange={() => handleToggleStrategy(strategy)}
+                        data-testid={`switch-strategy-${strategy.id}`}
+                      />
+                    )}
                   </div>
                 </CardHeader>
                 <CardContent>

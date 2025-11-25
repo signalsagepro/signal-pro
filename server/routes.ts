@@ -119,6 +119,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/strategies/merge", async (req, res) => {
+    try {
+      const { strategy1Id, strategy2Id, logic } = req.body;
+      
+      if (!strategy1Id || !strategy2Id || !logic) {
+        res.status(400).json({ error: "strategy1Id, strategy2Id, and logic are required" });
+        return;
+      }
+
+      if (!["AND", "OR"].includes(logic)) {
+        res.status(400).json({ error: "logic must be either 'AND' or 'OR'" });
+        return;
+      }
+
+      const mergedStrategy = await storage.mergeStrategies(strategy1Id, strategy2Id, logic);
+      if (!mergedStrategy) {
+        res.status(404).json({ error: "One or both strategies not found" });
+        return;
+      }
+
+      res.status(201).json(mergedStrategy);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to merge strategies" });
+    }
+  });
+
   app.post("/api/strategies/validate", async (req, res) => {
     try {
       const { formula } = req.body;

@@ -71,7 +71,7 @@ export class MemStorage implements IStorage {
   private initializeDefaultData() {
     const indianBrokers = ["zerodha", "upstox", "angel"];
     const forexBrokers = ["oanda", "ib", "fxcm"];
-    const notificationChannels = ["email", "sms", "webhook", "discord"];
+    const notificationChannels = ["email", "sms", "webhook", "discord", "telegram"];
 
     indianBrokers.forEach((name) => {
       const id = randomUUID();
@@ -154,7 +154,8 @@ export class MemStorage implements IStorage {
       this.assets.set(id, {
         ...asset,
         id,
-        enabled: true,
+        enabled: asset.enabled ?? true,
+        exchange: asset.exchange || "NSE",
         createdAt: new Date(),
       });
     });
@@ -228,6 +229,41 @@ export class MemStorage implements IStorage {
 
   async deleteStrategy(id: string): Promise<boolean> {
     return this.strategies.delete(id);
+  }
+
+  async mergeStrategies(strategy1Id: string, strategy2Id: string, logic: "AND" | "OR"): Promise<Strategy | undefined> {
+    const s1 = this.strategies.get(strategy1Id);
+    const s2 = this.strategies.get(strategy2Id);
+    
+    if (!s1 || !s2) return undefined;
+
+    const mergedName = `${s1.name} ${logic} ${s2.name}`;
+    const mergedType = `merged_${logic.toLowerCase()}_${strategy1Id.slice(0, 8)}_${strategy2Id.slice(0, 8)}`;
+    const mergedConditions = {
+      logic,
+      strategy1: s1.type,
+      strategy1Conditions: s1.conditions,
+      strategy2: s2.type,
+      strategy2Conditions: s2.conditions,
+    };
+
+    const mergedStrategy: Strategy = {
+      id: randomUUID(),
+      name: mergedName,
+      description: `Merged strategy: ${s1.name} ${logic} ${s2.name}`,
+      type: mergedType,
+      timeframe: s1.timeframe,
+      enabled: true,
+      conditions: mergedConditions,
+      isCustom: true,
+      formula: null,
+      signalCount: 0,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    this.strategies.set(mergedStrategy.id, mergedStrategy);
+    return mergedStrategy;
   }
 
   async getSignals(): Promise<Signal[]> {
