@@ -1,5 +1,4 @@
-import { useEffect } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
@@ -16,21 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { BrokerConfig } from "@shared/schema";
 
-export default function ConfigBrokers() {
-  const { user } = useAuth();
-  const [, navigate] = useLocation();
-
-  useEffect(() => {
-    if (user && user.role !== "admin") {
-      navigate("/");
-    }
-  }, [user, navigate]);
-
-  if (!user || user.role !== "admin") {
-    return null;
-  }
-
-  const INDIAN_BROKERS = [
+const INDIAN_BROKERS = [
   { id: "zerodha", name: "Zerodha Kite", description: "India's largest broker" },
   { id: "upstox", name: "Upstox", description: "Low-cost Indian broker" },
   { id: "angel", name: "Angel One", description: "Angel Broking platform" },
@@ -51,6 +36,23 @@ interface BrokerCardState {
 }
 
 export default function ConfigBrokers() {
+  const { user } = useAuth();
+  const [, navigate] = useLocation();
+
+  useEffect(() => {
+    if (user && user.role !== "admin") {
+      navigate("/");
+    }
+  }, [user, navigate]);
+
+  if (!user || user.role !== "admin") {
+    return null;
+  }
+
+  return <ConfigBrokersContent />;
+}
+
+function ConfigBrokersContent() {
   const [testingConnection, setTestingConnection] = useState<string | null>(null);
   const [cardStates, setCardStates] = useState<BrokerCardState>({});
   const { toast } = useToast();
@@ -191,7 +193,7 @@ export default function ConfigBrokers() {
               id={`${broker.id}-enabled`}
               checked={enabled}
               onCheckedChange={setEnabled}
-              data-testid={`switch-enabled-${broker.id}`}
+              data-testid={`switch-${broker.id}`}
             />
           </div>
         </CardContent>
@@ -201,7 +203,7 @@ export default function ConfigBrokers() {
               variant="outline"
               size="sm"
               onClick={() => handleTestConnection(config.id)}
-              disabled={!enabled || !apiKey || !apiSecret || testingConnection === config.id}
+              disabled={!enabled || testingConnection === config.id}
               data-testid={`button-test-${broker.id}`}
             >
               {testingConnection === config.id ? (
@@ -214,103 +216,63 @@ export default function ConfigBrokers() {
               )}
             </Button>
           )}
-          <Button
-            size="sm"
-            onClick={() => {
-              if (config) {
-                handleSave(config.id, { apiKey, apiSecret, enabled });
-              }
-            }}
-            disabled={!hasChanges || saveMutation.isPending}
-            data-testid={`button-save-${broker.id}`}
-          >
-            {saveMutation.isPending ? "Saving..." : "Save"}
-          </Button>
+          {hasChanges && config && (
+            <Button
+              size="sm"
+              onClick={() => handleSave(config.id, { apiKey, apiSecret, enabled })}
+              disabled={saveMutation.isPending}
+              data-testid={`button-save-${broker.id}`}
+            >
+              {saveMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                "Save Changes"
+              )}
+            </Button>
+          )}
         </CardFooter>
       </Card>
     );
   };
 
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="space-y-2">
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="h-4 w-96" />
+        </div>
+        {[1, 2, 3].map((i) => (
+          <Skeleton key={i} className="h-64 w-full" />
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold mb-2" data-testid="heading-broker-config">
-          Broker Configuration
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Connect to broker APIs for live market data and trading
-        </p>
+      <div className="space-y-2">
+        <h1 className="text-3xl font-bold tracking-tight">Broker Configuration</h1>
+        <p className="text-muted-foreground">Connect your trading broker accounts</p>
       </div>
 
-      <Tabs defaultValue="indian" className="space-y-6">
+      <Tabs defaultValue="indian" className="w-full">
         <TabsList>
-          <TabsTrigger value="indian" data-testid="tab-indian-brokers">
-            Indian Market
-          </TabsTrigger>
-          <TabsTrigger value="forex" data-testid="tab-forex-brokers">
-            Forex
-          </TabsTrigger>
+          <TabsTrigger value="indian" data-testid="tab-indian">Indian Brokers</TabsTrigger>
+          <TabsTrigger value="forex" data-testid="tab-forex">Forex Brokers</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="indian" className="space-y-4">
-          {isLoading ? (
-            <div className="space-y-4">
-              {[...Array(3)].map((_, i) => (
-                <Card key={i}>
-                  <CardHeader>
-                    <Skeleton className="h-6 w-1/3" />
-                    <Skeleton className="h-4 w-2/3 mt-2" />
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <Skeleton className="h-10 w-full" />
-                    <Skeleton className="h-10 w-full" />
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {INDIAN_BROKERS.map((broker) => renderBrokerCard(broker, "indian"))}
-            </div>
-          )}
+        <TabsContent value="indian" className="space-y-4 mt-6">
+          {INDIAN_BROKERS.map((broker) => renderBrokerCard(broker, "indian"))}
         </TabsContent>
 
-        <TabsContent value="forex" className="space-y-4">
-          {isLoading ? (
-            <div className="space-y-4">
-              {[...Array(3)].map((_, i) => (
-                <Card key={i}>
-                  <CardHeader>
-                    <Skeleton className="h-6 w-1/3" />
-                    <Skeleton className="h-4 w-2/3 mt-2" />
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <Skeleton className="h-10 w-full" />
-                    <Skeleton className="h-10 w-full" />
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {FOREX_BROKERS.map((broker) => renderBrokerCard(broker, "forex"))}
-            </div>
-          )}
+        <TabsContent value="forex" className="space-y-4 mt-6">
+          {FOREX_BROKERS.map((broker) => renderBrokerCard(broker, "forex"))}
         </TabsContent>
       </Tabs>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Important Notes</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2 text-sm text-muted-foreground">
-          <p>• API credentials are stored securely and encrypted</p>
-          <p>• Test the connection before enabling any integration</p>
-          <p>• Some brokers may require additional permissions or OAuth setup</p>
-          <p>• Live trading requires proper broker account configuration</p>
-          <p>• Make sure to review broker API rate limits and fees</p>
-        </CardContent>
-      </Card>
     </div>
   );
 }

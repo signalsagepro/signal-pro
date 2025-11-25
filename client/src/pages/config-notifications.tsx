@@ -15,28 +15,6 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { NotificationConfig } from "@shared/schema";
 import { Textarea } from "@/components/ui/textarea";
 
-export default function ConfigNotifications() {
-  const { user } = useAuth();
-  const [, navigate] = useLocation();
-
-  useEffect(() => {
-    if (user && user.role !== "admin") {
-      navigate("/");
-    }
-  }, [user, navigate]);
-
-  if (!user || user.role !== "admin") {
-    return null;
-  }
-
-  return <ConfigNotificationsContent />;
-}
-
-function ConfigNotificationsContent() {
-  const [testingChannel, setTestingChannel] = useState<string | null>(null);
-  const [cardStates, setCardStates] = useState<NotificationCardState>({});
-  const { toast } = useToast();
-
 const NOTIFICATION_CHANNELS = [
   {
     channel: "email",
@@ -96,6 +74,28 @@ interface NotificationCardState {
     configData: Record<string, string | string[]>;
   };
 }
+
+export default function ConfigNotifications() {
+  const { user } = useAuth();
+  const [, navigate] = useLocation();
+
+  useEffect(() => {
+    if (user && user.role !== "admin") {
+      navigate("/");
+    }
+  }, [user, navigate]);
+
+  if (!user || user.role !== "admin") {
+    return null;
+  }
+
+  return <ConfigNotificationsContent />;
+}
+
+function ConfigNotificationsContent() {
+  const [testingChannel, setTestingChannel] = useState<string | null>(null);
+  const [cardStates, setCardStates] = useState<NotificationCardState>({});
+  const { toast } = useToast();
 
   const { data: notificationConfigs = [], isLoading } = useQuery<NotificationConfig[]>({
     queryKey: ["/api/notification-configs"],
@@ -192,67 +192,67 @@ interface NotificationCardState {
             const arrayValue = isArrayField ? (Array.isArray(configData[field.key]) ? configData[field.key] : []) : [];
             
             return (
-            <div key={field.key} className="space-y-2">
-              <Label htmlFor={`${channelInfo.channel}-${field.key}`}>{field.label}</Label>
-              {isArrayField ? (
-                <div className="space-y-2">
-                  {(arrayValue as string[]).map((item, idx) => (
-                    <div key={idx} className="flex gap-2">
-                      <Input
-                        type={baseType}
-                        placeholder={field.placeholder}
-                        value={item}
-                        onChange={(e) => {
-                          const newArray = [...(arrayValue as string[])];
-                          newArray[idx] = e.target.value;
-                          setConfigData({ ...configData, [field.key]: newArray });
-                        }}
-                        data-testid={`input-${channelInfo.channel}-${field.key}-${idx}`}
-                      />
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => {
-                          const newArray = (arrayValue as string[]).filter((_, i) => i !== idx);
-                          setConfigData({ ...configData, [field.key]: newArray });
-                        }}
-                        data-testid={`button-remove-${field.key}-${idx}`}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setConfigData({ ...configData, [field.key]: [...(arrayValue as string[]), ""] });
-                    }}
-                    data-testid={`button-add-${field.key}`}
-                  >
-                    Add {field.label}
-                  </Button>
-                </div>
-              ) : field.type === "textarea" ? (
-                <Textarea
-                  id={`${channelInfo.channel}-${field.key}`}
-                  placeholder={field.placeholder}
-                  value={(configData[field.key] as string) || ""}
-                  onChange={(e) => setConfigData({ ...configData, [field.key]: e.target.value })}
-                  rows={3}
-                  data-testid={`input-${channelInfo.channel}-${field.key}`}
-                />
-              ) : (
-                <Input
-                  id={`${channelInfo.channel}-${field.key}`}
-                  type={field.type}
-                  placeholder={field.placeholder}
-                  value={(configData[field.key] as string) || ""}
-                  onChange={(e) => setConfigData({ ...configData, [field.key]: e.target.value })}
-                  data-testid={`input-${channelInfo.channel}-${field.key}`}
-                />
-              )}
-            </div>
+              <div key={field.key} className="space-y-2">
+                <Label htmlFor={`${channelInfo.channel}-${field.key}`}>{field.label}</Label>
+                {isArrayField ? (
+                  <div className="space-y-2">
+                    {(arrayValue as string[]).map((item, idx) => (
+                      <div key={idx} className="flex gap-2">
+                        <Input
+                          type={baseType}
+                          placeholder={field.placeholder}
+                          value={item}
+                          onChange={(e) => {
+                            const newArray = [...(arrayValue as string[])];
+                            newArray[idx] = e.target.value;
+                            setConfigData({ ...configData, [field.key]: newArray });
+                          }}
+                          data-testid={`input-${channelInfo.channel}-${field.key}-${idx}`}
+                        />
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => {
+                            const newArray = (arrayValue as string[]).filter((_, i) => i !== idx);
+                            setConfigData({ ...configData, [field.key]: newArray });
+                          }}
+                          data-testid={`button-remove-${field.key}-${idx}`}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setConfigData({ ...configData, [field.key]: [...(arrayValue as string[]), ""] });
+                      }}
+                      data-testid={`button-add-${field.key}`}
+                    >
+                      Add {field.label}
+                    </Button>
+                  </div>
+                ) : field.type === "textarea" ? (
+                  <Textarea
+                    id={`${channelInfo.channel}-${field.key}`}
+                    placeholder={field.placeholder}
+                    value={(configData[field.key] as string) || ""}
+                    onChange={(e) => setConfigData({ ...configData, [field.key]: e.target.value })}
+                    rows={3}
+                    data-testid={`input-${channelInfo.channel}-${field.key}`}
+                  />
+                ) : (
+                  <Input
+                    id={`${channelInfo.channel}-${field.key}`}
+                    type={field.type}
+                    placeholder={field.placeholder}
+                    value={(configData[field.key] as string) || ""}
+                    onChange={(e) => setConfigData({ ...configData, [field.key]: e.target.value })}
+                    data-testid={`input-${channelInfo.channel}-${field.key}`}
+                  />
+                )}
+              </div>
             );
           })}
           <div className="flex items-center justify-between pt-2">
@@ -287,70 +287,52 @@ interface NotificationCardState {
               )}
             </Button>
           )}
-          <Button
-            size="sm"
-            onClick={() => {
-              if (config) {
-                saveMutation.mutate({
-                  id: config.id,
-                  data: { config: configData, enabled },
-                });
-              }
-            }}
-            disabled={!hasChanges || saveMutation.isPending}
-            data-testid={`button-save-${channelInfo.channel}`}
-          >
-            {saveMutation.isPending ? "Saving..." : "Save"}
-          </Button>
+          {hasChanges && config && (
+            <Button
+              size="sm"
+              onClick={() => saveMutation.mutate({ id: config.id, data: { enabled, config: configData } })}
+              disabled={saveMutation.isPending}
+              data-testid={`button-save-${channelInfo.channel}`}
+            >
+              {saveMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                "Save Changes"
+              )}
+            </Button>
+          )}
         </CardFooter>
       </Card>
     );
   };
 
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="space-y-2">
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="h-4 w-96" />
+        </div>
+        {[1, 2, 3, 4, 5].map((i) => (
+          <Skeleton key={i} className="h-64 w-full" />
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold mb-2" data-testid="heading-notification-config">
-          Notification Settings
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Configure how you want to receive trading signal alerts
-        </p>
+      <div className="space-y-2">
+        <h1 className="text-3xl font-bold tracking-tight">Notification Configuration</h1>
+        <p className="text-muted-foreground">Set up notification channels for trading alerts</p>
       </div>
 
-      {isLoading ? (
-        <div className="space-y-4">
-          {[...Array(4)].map((_, i) => (
-            <Card key={i}>
-              <CardHeader>
-                <Skeleton className="h-6 w-1/3" />
-                <Skeleton className="h-4 w-2/3 mt-2" />
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <Skeleton className="h-10 w-full" />
-                <Skeleton className="h-10 w-full" />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {NOTIFICATION_CHANNELS.map((channel) => renderNotificationCard(channel))}
-        </div>
-      )}
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Notification Tips</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2 text-sm text-muted-foreground">
-          <p>• Enable multiple channels to ensure you never miss a signal</p>
-          <p>• Test each channel after configuration to verify delivery</p>
-          <p>• Webhook notifications include full signal data in JSON format</p>
-          <p>• SMS notifications may incur charges from your provider</p>
-          <p>• Discord webhooks are free and provide rich formatting</p>
-        </CardContent>
-      </Card>
+      <div className="space-y-4">
+        {NOTIFICATION_CHANNELS.map((channel) => renderNotificationCard(channel))}
+      </div>
     </div>
   );
 }
