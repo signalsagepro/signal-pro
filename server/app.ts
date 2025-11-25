@@ -44,6 +44,19 @@ app.use(express.json({
 }));
 app.use(express.urlencoded({ extended: false }));
 
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET || "dev-secret-key",
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      secure: false,
+      httpOnly: true,
+      maxAge: 1000 * 60 * 60 * 24, // 24 hours
+    },
+  })
+);
+
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
