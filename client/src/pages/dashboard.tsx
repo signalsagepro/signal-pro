@@ -80,13 +80,13 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold mb-2" data-testid="heading-dashboard">
+    <div className="space-y-8">
+      <div className="space-y-2">
+        <h1 className="text-3xl font-bold" data-testid="heading-dashboard">
           Dashboard
         </h1>
-        <p className="text-sm text-muted-foreground">
-          Overview of your trading signals and system status
+        <p className="text-base text-muted-foreground">
+          Real-time overview of your trading signals and market activity
         </p>
       </div>
 
@@ -95,12 +95,14 @@ export default function Dashboard() {
           const isLoading = signalsLoading || strategiesLoading || assetsLoading;
           
           return (
-            <Card key={metric.title} data-testid={metric.testId}>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
+            <Card key={metric.title} data-testid={metric.testId} className="shadow-md border-primary/10 hover:shadow-lg transition-shadow">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+                <CardTitle className="text-sm font-semibold text-muted-foreground">
                   {metric.title}
                 </CardTitle>
-                <metric.icon className={`h-4 w-4 ${metric.color}`} />
+                <div className="p-2 rounded-lg bg-gradient-to-br from-primary/10 to-primary/5">
+                  <metric.icon className={`h-5 w-5 ${metric.color}`} />
+                </div>
               </CardHeader>
               <CardContent>
                 {isLoading ? (

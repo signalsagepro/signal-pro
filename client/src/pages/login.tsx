@@ -40,41 +40,64 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle>SignalPro</CardTitle>
-          <CardDescription>Login to your trading signal dashboard</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="text-sm font-medium">Email</label>
-              <Input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                data-testid="input-email"
-              />
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-accent/5 p-4">
+      <div className="w-full max-w-md">
+        <div className="text-center mb-8">
+          <div className="flex justify-center mb-4">
+            <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary/80 text-primary-foreground shadow-lg">
+              <svg className="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
             </div>
-            <div>
-              <label className="text-sm font-medium">Password</label>
-              <Input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                data-testid="input-password"
-              />
+          </div>
+          <h1 className="text-3xl font-bold mb-2">SignalPro</h1>
+          <p className="text-muted-foreground">Professional Trading Signals</p>
+        </div>
+        
+        <Card className="shadow-lg border border-primary/10">
+          <CardHeader>
+            <CardTitle className="text-xl">Welcome Back</CardTitle>
+            <CardDescription>Sign in to access your trading dashboard</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-semibold">Email Address</label>
+                <Input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  data-testid="input-email"
+                  className="border-primary/20 focus:border-primary"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-semibold">Password</label>
+                <Input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  data-testid="input-password"
+                  className="border-primary/20 focus:border-primary"
+                />
+              </div>
+              {loginError && (
+                <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm font-medium">
+                  Invalid credentials. Please try again.
+                </div>
+              )}
+              <Button type="submit" disabled={loginPending} className="w-full py-6 text-base font-semibold" data-testid="button-login">
+                {loginPending ? "Logging in..." : "Sign In"}
+              </Button>
+            </form>
+            <div className="mt-6 text-center text-sm text-muted-foreground">
+              Don't have an account? <a href="/signup" className="text-primary font-semibold hover:underline">Sign up</a>
             </div>
-            {loginError && <div className="text-sm text-destructive">Invalid credentials</div>}
-            <Button type="submit" disabled={loginPending} className="w-full" data-testid="button-login">
-              {loginPending ? "Logging in..." : "Login"}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
