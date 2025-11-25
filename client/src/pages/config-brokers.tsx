@@ -25,8 +25,17 @@ const FOREX_BROKERS = [
   { id: "fxcm", name: "FXCM", description: "Forex capital markets" },
 ];
 
+interface BrokerCardState {
+  [key: string]: {
+    apiKey: string;
+    apiSecret: string;
+    enabled: boolean;
+  };
+}
+
 export default function ConfigBrokers() {
   const [testingConnection, setTestingConnection] = useState<string | null>(null);
+  const [cardStates, setCardStates] = useState<BrokerCardState>({});
   const { toast } = useToast();
 
   const { data: brokerConfigs = [], isLoading } = useQuery<BrokerConfig[]>({
@@ -76,9 +85,38 @@ export default function ConfigBrokers() {
 
   const renderBrokerCard = (broker: typeof INDIAN_BROKERS[0] | typeof FOREX_BROKERS[0], type: "indian" | "forex") => {
     const config = brokerConfigs.find((c) => c.name === broker.id && c.type === type);
-    const [apiKey, setApiKey] = useState(config?.apiKey || "");
-    const [apiSecret, setApiSecret] = useState(config?.apiSecret || "");
-    const [enabled, setEnabled] = useState(config?.enabled || false);
+    const stateKey = `${broker.id}-${type}`;
+    
+    const cardState = cardStates[stateKey] || {
+      apiKey: config?.apiKey || "",
+      apiSecret: config?.apiSecret || "",
+      enabled: config?.enabled || false,
+    };
+    
+    const apiKey = cardState.apiKey;
+    const apiSecret = cardState.apiSecret;
+    const enabled = cardState.enabled;
+
+    const setApiKey = (value: string) => {
+      setCardStates({
+        ...cardStates,
+        [stateKey]: { ...cardState, apiKey: value },
+      });
+    };
+
+    const setApiSecret = (value: string) => {
+      setCardStates({
+        ...cardStates,
+        [stateKey]: { ...cardState, apiSecret: value },
+      });
+    };
+
+    const setEnabled = (value: boolean) => {
+      setCardStates({
+        ...cardStates,
+        [stateKey]: { ...cardState, enabled: value },
+      });
+    };
 
     const hasChanges = apiKey !== (config?.apiKey || "") || 
                        apiSecret !== (config?.apiSecret || "") || 

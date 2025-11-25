@@ -106,8 +106,9 @@ export default function ConfigNotifications() {
 
   const renderNotificationCard = (channelInfo: typeof NOTIFICATION_CHANNELS[0]) => {
     const config = notificationConfigs.find((c) => c.channel === channelInfo.channel);
+    const channelKey = channelInfo.channel;
     
-    const cardState = cardStates[channelInfo.channel] || {
+    const cardState = cardStates[channelKey] || {
       enabled: config?.enabled || false,
       configData: (config?.config as Record<string, string>) || {},
     };
@@ -118,14 +119,14 @@ export default function ConfigNotifications() {
     const setEnabled = (value: boolean) => {
       setCardStates({
         ...cardStates,
-        [channelInfo.channel]: { ...cardState, enabled: value },
+        [channelKey]: { ...cardState, enabled: value },
       });
     };
     
     const setConfigData = (data: Record<string, string>) => {
       setCardStates({
         ...cardStates,
-        [channelInfo.channel]: { ...cardState, configData: data },
+        [channelKey]: { ...cardState, configData: data },
       });
     };
 

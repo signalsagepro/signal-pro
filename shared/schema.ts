@@ -144,7 +144,7 @@ export type SignalType =
   | "5m_touch_200_downtrend"
   | "15m_below_200_breakdown";
 
-export type AssetType = "indian_stock" | "forex";
+export type AssetType = "indian_stock" | "indian_futures" | "forex";
 export type Timeframe = "5m" | "15m";
 export type BrokerType = "indian" | "forex";
 export type NotificationChannel = "email" | "sms" | "webhook" | "discord";
