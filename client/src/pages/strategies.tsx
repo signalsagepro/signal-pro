@@ -250,14 +250,14 @@ export default function Strategies() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold mb-2" data-testid="heading-strategies">
+        <div className="space-y-2">
+          <h1 className="text-3xl font-bold" data-testid="heading-strategies">
             Strategies
           </h1>
-          <p className="text-sm text-muted-foreground">
-            {isAdmin ? "Manage your trading signal strategies" : "View active trading signal strategies"}
+          <p className="text-base text-muted-foreground">
+            {isAdmin ? "Build and manage your trading strategies" : "View active trading strategies"}
           </p>
         </div>
         {isAdmin && (
@@ -268,17 +268,20 @@ export default function Strategies() {
                 onClick={() => setMergeMode(true)}
                 disabled={strategies.length < 2}
                 data-testid="button-merge-strategies"
+                className="gap-2"
               >
-                <Merge className="h-4 w-4 mr-2" />
-                Merge
+                <Merge className="h-4 w-4" />
+                <span className="hidden sm:inline">Merge</span>
               </Button>
             )}
             <Button
               onClick={() => setIsAddDialogOpen(true)}
               data-testid="button-add-strategy"
+              className="gap-2"
             >
-              <Plus className="h-4 w-4 mr-2" />
-              Add Strategy
+              <Plus className="h-4 w-4" />
+              <span className="hidden sm:inline">Add Strategy</span>
+              <span className="sm:hidden">Add</span>
             </Button>
           </div>
         )}

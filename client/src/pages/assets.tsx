@@ -161,14 +161,14 @@ export default function Assets() {
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Header Section */}
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-3xl font-bold mb-2" data-testid="heading-assets">
-            Assets
+        <div className="space-y-2">
+          <h1 className="text-3xl font-bold" data-testid="heading-assets">
+            Trading Assets
           </h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-base text-muted-foreground">
             Monitor and manage your trading instruments
           </p>
         </div>
@@ -178,7 +178,8 @@ export default function Assets() {
           className="gap-2"
         >
           <Plus className="h-4 w-4" />
-          Add Asset
+          <span className="hidden sm:inline">Add Asset</span>
+          <span className="sm:hidden">Add</span>
         </Button>
       </div>
 
@@ -326,25 +327,23 @@ export default function Assets() {
                       </TableHeader>
                       <TableBody>
                         {indianMarketAssets.map((asset) => (
-                          <TableRow key={asset.id} data-testid={`asset-row-${asset.id}`} className="border-b border-border/30 hover:bg-muted/50">
-                            <TableCell className="font-mono font-semibold text-chart-2">
+                          <TableRow key={asset.id} data-testid={`asset-row-${asset.id}`} className="border-b border-border/30 hover:bg-muted/50 transition-colors">
+                            <TableCell className="font-mono font-bold text-lg text-primary">
                               {asset.symbol}
                             </TableCell>
-                            <TableCell className="font-medium">{asset.name}</TableCell>
+                            <TableCell className="font-semibold text-foreground">{asset.name}</TableCell>
                             <TableCell>
-                              <Badge variant="outline" className="text-xs bg-chart-2/10">
+                              <Badge className="text-xs font-semibold bg-chart-2 text-white">
                                 {asset.type === "indian_stock" ? "Stock" : "Futures"}
                               </Badge>
                             </TableCell>
-                            <TableCell className="text-muted-foreground text-sm">
+                            <TableCell className="text-muted-foreground text-sm font-medium">
                               {asset.exchange || "—"}
                             </TableCell>
                             <TableCell>
-                              <Switch
-                                checked={asset.enabled}
-                                onCheckedChange={() => handleToggleAsset(asset)}
-                                data-testid={`switch-asset-${asset.id}`}
-                              />
+                              <Badge variant={asset.enabled ? "default" : "secondary"} className="text-xs font-semibold">
+                                {asset.enabled ? "Active" : "Inactive"}
+                              </Badge>
                             </TableCell>
                             <TableCell className="text-right">
                               <Button
@@ -402,25 +401,23 @@ export default function Assets() {
                       </TableHeader>
                       <TableBody>
                         {forexAssets.map((asset) => (
-                          <TableRow key={asset.id} data-testid={`asset-row-${asset.id}`} className="border-b border-border/30 hover:bg-muted/50">
-                            <TableCell className="font-mono font-semibold text-chart-3">
+                          <TableRow key={asset.id} data-testid={`asset-row-${asset.id}`} className="border-b border-border/30 hover:bg-muted/50 transition-colors">
+                            <TableCell className="font-mono font-bold text-lg text-primary">
                               {asset.symbol}
                             </TableCell>
-                            <TableCell className="font-medium">{asset.name}</TableCell>
+                            <TableCell className="font-semibold text-foreground">{asset.name}</TableCell>
                             <TableCell>
-                              <Badge variant="outline" className="text-xs bg-chart-3/10">
+                              <Badge className="text-xs font-semibold bg-chart-3 text-white">
                                 Forex
                               </Badge>
                             </TableCell>
-                            <TableCell className="text-muted-foreground text-sm">
+                            <TableCell className="text-muted-foreground text-sm font-medium">
                               {asset.exchange || "—"}
                             </TableCell>
                             <TableCell>
-                              <Switch
-                                checked={asset.enabled}
-                                onCheckedChange={() => handleToggleAsset(asset)}
-                                data-testid={`switch-asset-${asset.id}`}
-                              />
+                              <Badge variant={asset.enabled ? "default" : "secondary"} className="text-xs font-semibold">
+                                {asset.enabled ? "Active" : "Inactive"}
+                              </Badge>
                             </TableCell>
                             <TableCell className="text-right">
                               <Button
