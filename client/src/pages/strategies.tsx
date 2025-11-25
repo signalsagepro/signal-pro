@@ -132,6 +132,8 @@ const STRATEGY_FORMULAS = {
 
 export default function Strategies() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isInfoDialogOpen, setIsInfoDialogOpen] = useState(false);
+  const [selectedFormulaKey, setSelectedFormulaKey] = useState<string | null>(null);
   const [editingStrategy, setEditingStrategy] = useState<Strategy | null>(null);
   const [expandedStrategies, setExpandedStrategies] = useState<Set<string>>(new Set());
   const [mergeMode, setMergeMode] = useState(false);

@@ -1,9 +1,9 @@
-import type { Express } from "express";
+import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
 import { z } from "zod";
-import { insertAssetSchema, insertStrategySchema, insertSignalSchema } from "@shared/schema";
+import { insertAssetSchema, insertStrategySchema, insertSignalSchema, insertUserSchema } from "@shared/schema";
 import { marketDataGenerator } from "./services/market-data-generator";
 
 const clients = new Set<WebSocket>();
@@ -16,7 +16,80 @@ function broadcastSignal(signal: any) {
   });
 }
 
+declare global {
+  namespace Express {
+    interface Request {
+      userId?: string;
+      userRole?: string;
+    }
+  }
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
+  app.post("/api/auth/login", async (req: Request, res: Response) => {
+    try {
+      const { email, password } = req.body;
+      const user = await storage.verifyUserPassword(email, password);
+      if (!user) {
+        res.status(401).json({ error: "Invalid credentials" });
+        return;
+      }
+      req.session!.userId = user.id;
+      req.session!.userRole = user.role;
+      res.json({ user: { id: user.id, email: user.email, name: user.name, role: user.role } });
+    } catch (error) {
+      res.status(500).json({ error: "Login failed" });
+    }
+  });
+
+  app.post("/api/auth/signup", async (req: Request, res: Response) => {
+    try {
+      const data = insertUserSchema.parse(req.body);
+      const existing = await storage.getUserByEmail(data.email);
+      if (existing) {
+        res.status(400).json({ error: "Email already exists" });
+        return;
+      }
+      const user = await storage.createUser(data);
+      req.session!.userId = user.id;
+      req.session!.userRole = user.role;
+      res.status(201).json({ user: { id: user.id, email: user.email, name: user.name, role: user.role } });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ error: "Validation error", details: error.errors });
+      } else {
+        res.status(500).json({ error: "Signup failed" });
+      }
+    }
+  });
+
+  app.post("/api/auth/logout", async (req: Request, res: Response) => {
+    req.session!.destroy((err) => {
+      if (err) {
+        res.status(500).json({ error: "Logout failed" });
+      } else {
+        res.json({ success: true });
+      }
+    });
+  });
+
+  app.get("/api/auth/me", async (req: Request, res: Response) => {
+    try {
+      if (!req.session!.userId) {
+        res.json(null);
+        return;
+      }
+      const user = await storage.getUser(req.session!.userId);
+      if (!user) {
+        res.json(null);
+        return;
+      }
+      res.json({ id: user.id, email: user.email, name: user.name, role: user.role });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to get user" });
+    }
+  });
+
   app.get("/api/assets", async (req, res) => {
     try {
       const assets = await storage.getAssets();
