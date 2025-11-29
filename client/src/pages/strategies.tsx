@@ -28,12 +28,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Strategy, InsertStrategy } from "@shared/schema";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { AdvancedStrategyBuilder } from "@/components/advanced-strategy-builder";
 
 const PRESET_STRATEGIES = [
   {
@@ -541,46 +548,62 @@ export default function Strategies() {
 
       {isAdmin && (
         <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Add Strategy</DialogTitle>
               <DialogDescription>
-                Select a preset strategy to add to your collection
+                Choose a preset strategy or build your own with the advanced builder
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-4">
-              {PRESET_STRATEGIES.map((preset) => {
-                const alreadyAdded = strategies.some((s) => s.type === preset.type);
-                
-                return (
-                  <Card key={preset.type} className={alreadyAdded ? "opacity-50" : ""}>
-                    <CardHeader>
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex-1 space-y-2">
-                          <div className="flex items-center gap-2">
-                            <CardTitle className="text-sm">{preset.name}</CardTitle>
-                            <Badge variant="outline" className="text-xs">
-                              {preset.timeframe.toUpperCase()}
-                            </Badge>
+            <Tabs defaultValue="presets" className="w-full">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="presets" data-testid="tab-presets">Presets</TabsTrigger>
+                <TabsTrigger value="builder" data-testid="tab-advanced-builder">Advanced Builder</TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="presets" className="space-y-4">
+                {PRESET_STRATEGIES.map((preset) => {
+                  const alreadyAdded = strategies.some((s) => s.type === preset.type);
+                  
+                  return (
+                    <Card key={preset.type} className={alreadyAdded ? "opacity-50" : ""}>
+                      <CardHeader>
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1 space-y-2">
+                            <div className="flex items-center gap-2">
+                              <CardTitle className="text-sm">{preset.name}</CardTitle>
+                              <Badge variant="outline" className="text-xs">
+                                {preset.timeframe.toUpperCase()}
+                              </Badge>
+                            </div>
+                            <CardDescription className="text-xs">
+                              {preset.description}
+                            </CardDescription>
                           </div>
-                          <CardDescription className="text-xs">
-                            {preset.description}
-                          </CardDescription>
+                          <Button
+                            size="sm"
+                            onClick={() => handleAddPreset(preset)}
+                            disabled={alreadyAdded || createMutation.isPending}
+                            data-testid={`button-add-preset-${preset.type}`}
+                          >
+                            {alreadyAdded ? "Added" : "Add"}
+                          </Button>
                         </div>
-                        <Button
-                          size="sm"
-                          onClick={() => handleAddPreset(preset)}
-                          disabled={alreadyAdded || createMutation.isPending}
-                          data-testid={`button-add-preset-${preset.type}`}
-                        >
-                          {alreadyAdded ? "Added" : "Add"}
-                        </Button>
-                      </div>
-                    </CardHeader>
-                  </Card>
-                );
-              })}
-            </div>
+                      </CardHeader>
+                    </Card>
+                  );
+                })}
+              </TabsContent>
+
+              <TabsContent value="builder" className="mt-4">
+                <AdvancedStrategyBuilder
+                  isLoading={createMutation.isPending}
+                  onBuild={(strategyData) => {
+                    createMutation.mutate(strategyData);
+                  }}
+                />
+              </TabsContent>
+            </Tabs>
           </DialogContent>
         </Dialog>
       )}
