@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Bell, Mail, MessageSquare, Webhook, CheckCircle2, Loader2, X } from "lucide-react";
+import { Bell, Mail, MessageSquare, Webhook, CheckCircle2, Loader2, X, Settings } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -223,21 +223,21 @@ function ConfigNotificationsContent() {
         </CardHeader>
         <CardContent className="space-y-4 pt-4">
           {!showSettings ? (
-            <div className="flex flex-col items-start justify-between gap-4 py-2">
-              <div className="space-y-1">
-                <p className="text-sm text-muted-foreground">
-                  {config && Object.keys(configData).length > 0 
-                    ? "Configured" 
-                    : "Not configured"}
-                </p>
-              </div>
+            <div className="flex flex-col items-center justify-center gap-4 py-6">
               <Button
+                size="icon"
                 variant="outline"
-                size="sm"
                 onClick={() => setShowSettings(true)}
+                className={`h-12 w-12 rounded-full border-2 transition-all ${
+                  Object.keys(configData).length > 0 
+                    ? "border-green-500 hover:bg-green-50 dark:hover:bg-green-950" 
+                    : "border-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-950"
+                }`}
                 data-testid={`button-settings-${channelInfo.channel}`}
               >
-                Settings
+                <Settings className={`h-6 w-6 ${
+                  Object.keys(configData).length > 0 ? "text-green-500" : "text-yellow-500"
+                }`} />
               </Button>
             </div>
           ) : (
@@ -245,7 +245,10 @@ function ConfigNotificationsContent() {
               {channelInfo.fields.map((field) => {
                 const isArrayField = field.type.startsWith("array-");
                 const baseType = isArrayField ? field.type.split("-")[1] : field.type;
-                const arrayValue = isArrayField ? (Array.isArray(configData[field.key]) ? configData[field.key] : []) : [];
+                const currentValue = configData[field.key];
+                const arrayValue = isArrayField 
+                  ? (Array.isArray(currentValue) ? currentValue : (currentValue ? [currentValue as string] : []))
+                  : [];
                 
                 return (
                   <div key={field.key} className="space-y-2">
@@ -257,7 +260,7 @@ function ConfigNotificationsContent() {
                             <Input
                               type={baseType}
                               placeholder={field.placeholder}
-                              value={item}
+                              value={item || ""}
                               onChange={(e) => {
                                 const newArray = [...(arrayValue as string[])];
                                 newArray[idx] = e.target.value;
