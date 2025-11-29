@@ -194,6 +194,33 @@ const PRESET_ASSETS = [
   { symbol: "NIFTYAUTO", name: "Nifty Auto", type: "indian_futures", exchange: "NSE" },
   { symbol: "NIFTYPHARM", name: "Nifty Pharma", type: "indian_futures", exchange: "NSE" },
   { symbol: "NIFTYREALTY", name: "Nifty Realty", type: "indian_futures", exchange: "NSE" },
+  // US Market - Commodities
+  { symbol: "USOIL", name: "US Crude Oil", type: "indian_futures", exchange: "NYMEX" },
+  { symbol: "USGAS", name: "US Natural Gas", type: "indian_futures", exchange: "NYMEX" },
+  { symbol: "GOLD", name: "Gold Futures", type: "indian_futures", exchange: "COMEX" },
+  { symbol: "SILVER", name: "Silver Futures", type: "indian_futures", exchange: "COMEX" },
+  { symbol: "COPPER", name: "Copper Futures", type: "indian_futures", exchange: "COMEX" },
+  // US Market - Indices
+  { symbol: "SPX", name: "S&P 500", type: "indian_futures", exchange: "CME" },
+  { symbol: "NDX", name: "NASDAQ-100", type: "indian_futures", exchange: "CME" },
+  { symbol: "DXY", name: "US Dollar Index", type: "indian_futures", exchange: "ICE" },
+  { symbol: "VIX", name: "Volatility Index", type: "indian_futures", exchange: "CBOE" },
+  // Commodities - Energy
+  { symbol: "BRENT", name: "Brent Crude Oil", type: "indian_futures", exchange: "ICE" },
+  { symbol: "NATGAS", name: "Natural Gas", type: "indian_futures", exchange: "NYMEX" },
+  // Commodities - Metals
+  { symbol: "PALLADIUM", name: "Palladium", type: "indian_futures", exchange: "NYMEX" },
+  { symbol: "PLATINUM", name: "Platinum", type: "indian_futures", exchange: "NYMEX" },
+  // Commodities - Agriculture
+  { symbol: "WHEAT", name: "Wheat Futures", type: "indian_futures", exchange: "CBOT" },
+  { symbol: "CORN", name: "Corn Futures", type: "indian_futures", exchange: "CBOT" },
+  { symbol: "SOYBEANS", name: "Soybean Futures", type: "indian_futures", exchange: "CBOT" },
+  { symbol: "COFFEE", name: "Coffee Futures", type: "indian_futures", exchange: "ICE" },
+  { symbol: "SUGAR", name: "Sugar Futures", type: "indian_futures", exchange: "ICE" },
+  // Bonds
+  { symbol: "TY", name: "US 10Y Bond", type: "indian_futures", exchange: "CBOT" },
+  { symbol: "FV", name: "US 5Y Bond", type: "indian_futures", exchange: "CBOT" },
+  { symbol: "ZN", name: "30Y Bond", type: "indian_futures", exchange: "CBOT" },
 ];
 
 export default function Assets() {
