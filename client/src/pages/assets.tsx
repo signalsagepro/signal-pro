@@ -58,7 +58,7 @@ const assetFormSchema = z.object({
 type AssetFormData = z.infer<typeof assetFormSchema>;
 
 const PRESET_ASSETS = [
-  // Indian Stocks - Large Cap
+  // Indian Stocks with Futures (F&O enabled)
   { symbol: "RELIANCE", name: "Reliance Industries", type: "indian_stock", exchange: "NSE" },
   { symbol: "TCS", name: "Tata Consultancy Services", type: "indian_stock", exchange: "NSE" },
   { symbol: "HDFCBANK", name: "HDFC Bank", type: "indian_stock", exchange: "NSE" },
@@ -75,21 +75,16 @@ const PRESET_ASSETS = [
   { symbol: "JSWSTEEL", name: "JSW Steel", type: "indian_stock", exchange: "NSE" },
   { symbol: "BHARTIARTL", name: "Bharti Airtel", type: "indian_stock", exchange: "NSE" },
   { symbol: "ITC", name: "ITC Limited", type: "indian_stock", exchange: "NSE" },
-  { symbol: "NESTLEIND", name: "Nestlé India", type: "indian_stock", exchange: "NSE" },
   { symbol: "SUNPHARMA", name: "Sun Pharmaceutical", type: "indian_stock", exchange: "NSE" },
   { symbol: "DRREDDY", name: "Dr. Reddy's Laboratories", type: "indian_stock", exchange: "NSE" },
-  { symbol: "CIPLA", name: "Cipla Limited", type: "indian_stock", exchange: "NSE" },
-  { symbol: "APOLLOHOSP", name: "Apollo Hospitals", type: "indian_stock", exchange: "NSE" },
   { symbol: "BAJAJFINSV", name: "Bajaj Finserv", type: "indian_stock", exchange: "NSE" },
   { symbol: "BAJAJHLDNG", name: "Bajaj Holdings", type: "indian_stock", exchange: "NSE" },
-  { symbol: "YESBANK", name: "YES Bank", type: "indian_stock", exchange: "NSE" },
-  // Indian Stocks - Mid Cap
-  { symbol: "LTTS", name: "LT Infotech", type: "indian_stock", exchange: "NSE" },
-  { symbol: "MINDTREE", name: "Mindtree", type: "indian_stock", exchange: "NSE" },
-  { symbol: "PERSISTENT", name: "Persistent Systems", type: "indian_stock", exchange: "NSE" },
   { symbol: "TECHM", name: "Tech Mahindra", type: "indian_stock", exchange: "NSE" },
   { symbol: "HCLT", name: "HCL Technologies", type: "indian_stock", exchange: "NSE" },
-  { symbol: "HEXAWARE", name: "Hexaware Technologies", type: "indian_stock", exchange: "NSE" },
+  { symbol: "CIPLA", name: "Cipla Limited", type: "indian_stock", exchange: "NSE" },
+  { symbol: "APOLLOHOSP", name: "Apollo Hospitals", type: "indian_stock", exchange: "NSE" },
+  { symbol: "POWERGRID", name: "Power Grid Corporation", type: "indian_stock", exchange: "NSE" },
+  { symbol: "GAIL", name: "GAIL (India)", type: "indian_stock", exchange: "NSE" },
   // Indian Futures - Indices
   { symbol: "NIFTY50", name: "Nifty 50", type: "indian_futures", exchange: "NSE" },
   { symbol: "NIFTYNXT50", name: "Nifty Next 50", type: "indian_futures", exchange: "NSE" },
@@ -104,35 +99,6 @@ const PRESET_ASSETS = [
   { symbol: "NIFTYAUTO", name: "Nifty Auto", type: "indian_futures", exchange: "NSE" },
   { symbol: "NIFTYPHARM", name: "Nifty Pharma", type: "indian_futures", exchange: "NSE" },
   { symbol: "NIFTYREALTY", name: "Nifty Realty", type: "indian_futures", exchange: "NSE" },
-  // Indian Futures - Individual Stocks
-  { symbol: "RELIANCE-FUT", name: "Reliance Futures", type: "indian_futures", exchange: "NSE" },
-  { symbol: "TCS-FUT", name: "TCS Futures", type: "indian_futures", exchange: "NSE" },
-  { symbol: "INFY-FUT", name: "Infosys Futures", type: "indian_futures", exchange: "NSE" },
-  { symbol: "WIPRO-FUT", name: "Wipro Futures", type: "indian_futures", exchange: "NSE" },
-  // Forex - Major Pairs
-  { symbol: "EURUSD", name: "Euro / US Dollar", type: "forex", exchange: "FOREX" },
-  { symbol: "GBPUSD", name: "British Pound / US Dollar", type: "forex", exchange: "FOREX" },
-  { symbol: "USDJPY", name: "US Dollar / Japanese Yen", type: "forex", exchange: "FOREX" },
-  { symbol: "AUDUSD", name: "Australian Dollar / US Dollar", type: "forex", exchange: "FOREX" },
-  { symbol: "USDINR", name: "US Dollar / Indian Rupee", type: "forex", exchange: "FOREX" },
-  { symbol: "CHFUSD", name: "Swiss Franc / US Dollar", type: "forex", exchange: "FOREX" },
-  { symbol: "CADUSD", name: "Canadian Dollar / US Dollar", type: "forex", exchange: "FOREX" },
-  { symbol: "NZDUSD", name: "New Zealand Dollar / US Dollar", type: "forex", exchange: "FOREX" },
-  { symbol: "USDSEK", name: "US Dollar / Swedish Krona", type: "forex", exchange: "FOREX" },
-  { symbol: "USDNOK", name: "US Dollar / Norwegian Krone", type: "forex", exchange: "FOREX" },
-  { symbol: "SGDUSD", name: "Singapore Dollar / US Dollar", type: "forex", exchange: "FOREX" },
-  { symbol: "HKDUSD", name: "Hong Kong Dollar / US Dollar", type: "forex", exchange: "FOREX" },
-  // Forex - Cross Pairs
-  { symbol: "EURGBP", name: "Euro / British Pound", type: "forex", exchange: "FOREX" },
-  { symbol: "EURJPY", name: "Euro / Japanese Yen", type: "forex", exchange: "FOREX" },
-  { symbol: "EURCAD", name: "Euro / Canadian Dollar", type: "forex", exchange: "FOREX" },
-  { symbol: "GBPJPY", name: "British Pound / Japanese Yen", type: "forex", exchange: "FOREX" },
-  { symbol: "GBPAUD", name: "British Pound / Australian Dollar", type: "forex", exchange: "FOREX" },
-  { symbol: "AUDJPY", name: "Australian Dollar / Japanese Yen", type: "forex", exchange: "FOREX" },
-  { symbol: "AUDJPY", name: "Australian Dollar / Japanese Yen", type: "forex", exchange: "FOREX" },
-  { symbol: "CADJPY", name: "Canadian Dollar / Japanese Yen", type: "forex", exchange: "FOREX" },
-  { symbol: "NZDJPY", name: "New Zealand Dollar / Japanese Yen", type: "forex", exchange: "FOREX" },
-  { symbol: "INRUSD", name: "Indian Rupee / US Dollar", type: "forex", exchange: "FOREX" },
 ];
 
 export default function Assets() {
