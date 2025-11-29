@@ -28,7 +28,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Plus, Layers, Search, Trash2, Edit, Check, X, TrendingUp, DollarSign } from "lucide-react";
+import { Plus, Layers, Search, Trash2, Edit, Check, X, TrendingUp, DollarSign, Loader2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -64,14 +64,38 @@ const PRESET_ASSETS = [
   { symbol: "INFY", name: "Infosys", type: "indian_stock", exchange: "NSE" },
   { symbol: "WIPRO", name: "Wipro", type: "indian_stock", exchange: "NSE" },
   { symbol: "BAJAJFINSV", name: "Bajaj Finserv", type: "indian_stock", exchange: "NSE" },
+  { symbol: "ICICIBANK", name: "ICICI Bank", type: "indian_stock", exchange: "NSE" },
+  { symbol: "HDFCBANK", name: "HDFC Bank Limited", type: "indian_stock", exchange: "NSE" },
+  { symbol: "KOTAKBANK", name: "Kotak Mahindra Bank", type: "indian_stock", exchange: "NSE" },
+  { symbol: "AXISBANK", name: "Axis Bank", type: "indian_stock", exchange: "NSE" },
+  { symbol: "SBIN", name: "State Bank of India", type: "indian_stock", exchange: "NSE" },
+  { symbol: "LT", name: "Larsen & Toubro", type: "indian_stock", exchange: "NSE" },
+  { symbol: "MARUTI", name: "Maruti Suzuki", type: "indian_stock", exchange: "NSE" },
+  { symbol: "ONGC", name: "Oil and Natural Gas Corporation", type: "indian_stock", exchange: "NSE" },
+  { symbol: "TATASTEEL", name: "Tata Steel", type: "indian_stock", exchange: "NSE" },
+  { symbol: "JSWSTEEL", name: "JSW Steel", type: "indian_stock", exchange: "NSE" },
+  { symbol: "BHARTIARTL", name: "Bharti Airtel", type: "indian_stock", exchange: "NSE" },
+  { symbol: "ITC", name: "ITC Limited", type: "indian_stock", exchange: "NSE" },
+  { symbol: "NESTLEIND", name: "Nestlé India", type: "indian_stock", exchange: "NSE" },
+  { symbol: "SUNPHARMA", name: "Sun Pharmaceutical", type: "indian_stock", exchange: "NSE" },
+  { symbol: "DRREDDY", name: "Dr. Reddy's Laboratories", type: "indian_stock", exchange: "NSE" },
+  { symbol: "CIPLA", name: "Cipla Limited", type: "indian_stock", exchange: "NSE" },
+  { symbol: "APOLLOHOSP", name: "Apollo Hospitals", type: "indian_stock", exchange: "NSE" },
+  { symbol: "BAJAJFINSV", name: "Bajaj Finserv", type: "indian_stock", exchange: "NSE" },
+  { symbol: "BAJAJHLDNG", name: "Bajaj Holdings", type: "indian_stock", exchange: "NSE" },
+  { symbol: "YESBANK", name: "YES Bank", type: "indian_stock", exchange: "NSE" },
   { symbol: "NIFTYNXT50", name: "Nifty Next 50", type: "indian_futures", exchange: "NSE" },
   { symbol: "BANKNIFTY", name: "Bank Nifty", type: "indian_futures", exchange: "NSE" },
   { symbol: "NIFTY50", name: "Nifty 50", type: "indian_futures", exchange: "NSE" },
+  { symbol: "FINNIFTY", name: "Fin Nifty", type: "indian_futures", exchange: "NSE" },
+  { symbol: "MIDCPNIFTY", name: "Midcap Nifty", type: "indian_futures", exchange: "NSE" },
   { symbol: "EURUSD", name: "Euro / US Dollar", type: "forex", exchange: "FOREX" },
   { symbol: "GBPUSD", name: "British Pound / US Dollar", type: "forex", exchange: "FOREX" },
   { symbol: "USDJPY", name: "US Dollar / Japanese Yen", type: "forex", exchange: "FOREX" },
   { symbol: "AUDUSD", name: "Australian Dollar / US Dollar", type: "forex", exchange: "FOREX" },
   { symbol: "USDINR", name: "US Dollar / Indian Rupee", type: "forex", exchange: "FOREX" },
+  { symbol: "CHFUSD", name: "Swiss Franc / US Dollar", type: "forex", exchange: "FOREX" },
+  { symbol: "CADUSD", name: "Canadian Dollar / US Dollar", type: "forex", exchange: "FOREX" },
 ];
 
 export default function Assets() {
@@ -80,6 +104,8 @@ export default function Assets() {
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [activeTab, setActiveTab] = useState("indian");
   const [assetSearchQuery, setAssetSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<typeof PRESET_ASSETS>([]);
+  const [isSearching, setIsSearching] = useState(false);
   const { toast } = useToast();
 
   const form = useForm<AssetFormData>({
@@ -144,13 +170,31 @@ export default function Assets() {
     createMutation.mutate(data);
   };
 
-  const filteredPresetAssets = PRESET_ASSETS.filter((preset) => {
-    const alreadyExists = assets.some((a) => a.symbol === preset.symbol);
-    const matchesSearch =
-      preset.symbol.toLowerCase().includes(assetSearchQuery.toLowerCase()) ||
-      preset.name.toLowerCase().includes(assetSearchQuery.toLowerCase());
-    return matchesSearch && !alreadyExists;
-  });
+  const searchAssets = async (query: string) => {
+    if (!query.trim()) {
+      setSearchResults([]);
+      return;
+    }
+
+    setIsSearching(true);
+    try {
+      const results = PRESET_ASSETS.filter((preset) => {
+        const alreadyExists = assets.some((a) => a.symbol === preset.symbol);
+        const matchesSearch =
+          preset.symbol.toLowerCase().includes(query.toLowerCase()) ||
+          preset.name.toLowerCase().includes(query.toLowerCase());
+        return matchesSearch && !alreadyExists;
+      });
+      setSearchResults(results);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleSearchChange = (value: string) => {
+    setAssetSearchQuery(value);
+    searchAssets(value);
+  };
 
   const addPresetAsset = (preset: typeof PRESET_ASSETS[0]) => {
     form.setValue("symbol", preset.symbol);
@@ -158,6 +202,7 @@ export default function Assets() {
     form.setValue("type", preset.type as any);
     form.setValue("exchange", preset.exchange);
     setAssetSearchQuery("");
+    setSearchResults([]);
   };
 
   const handleToggleAsset = (asset: Asset) => {
@@ -504,13 +549,17 @@ export default function Assets() {
           {/* Search Preset Assets */}
           <div className="space-y-2">
             <Label htmlFor="asset-search">Search Assets</Label>
-            <div className="flex gap-2">
-              <Search className="h-4 w-4 text-muted-foreground mt-2.5" />
+            <div className="flex gap-2 relative">
+              {isSearching ? (
+                <Loader2 className="h-4 w-4 text-muted-foreground mt-2.5 animate-spin" />
+              ) : (
+                <Search className="h-4 w-4 text-muted-foreground mt-2.5" />
+              )}
               <Input
                 id="asset-search"
                 placeholder="Search symbols or names (e.g., RELIANCE, EUR)"
                 value={assetSearchQuery}
-                onChange={(e) => setAssetSearchQuery(e.target.value)}
+                onChange={(e) => handleSearchChange(e.target.value)}
                 data-testid="input-asset-search"
               />
             </div>
@@ -519,8 +568,8 @@ export default function Assets() {
           {/* Preset Assets List */}
           {assetSearchQuery && (
             <div className="space-y-2 max-h-48 overflow-y-auto border rounded-md p-3 bg-muted/20">
-              {filteredPresetAssets.length > 0 ? (
-                filteredPresetAssets.map((preset) => (
+              {searchResults.length > 0 ? (
+                searchResults.map((preset) => (
                   <button
                     key={preset.symbol}
                     onClick={() => addPresetAsset(preset)}
