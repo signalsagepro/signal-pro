@@ -350,24 +350,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const notificationConfigs = await storage.getNotificationConfigs();
       const emailConfig = notificationConfigs.find(c => c.channel === "email" && c.enabled);
       
-      if (emailConfig && emailConfig.settings?.emailAddresses) {
-        const asset = await storage.getAsset(signal.assetId);
-        const strategy = await storage.getStrategy(signal.strategyId);
+      if (emailConfig && emailConfig.config) {
+        const configData = emailConfig.config as Record<string, any>;
+        const recipients = configData.recipients;
         
-        if (asset && strategy) {
-          const emails = Array.isArray(emailConfig.settings.emailAddresses) 
-            ? emailConfig.settings.emailAddresses 
-            : [emailConfig.settings.emailAddresses];
+        if (recipients && (Array.isArray(recipients) ? recipients.length > 0 : recipients)) {
+          const asset = await storage.getAsset(signal.assetId);
+          const strategy = await storage.getStrategy(signal.strategyId);
           
-          emailService.sendSignalAlert(
-            emails,
-            asset.symbol,
-            strategy.name,
-            signal.type,
-            signal.price,
-            signal.ema50,
-            signal.ema200
-          ).catch(err => console.error("Failed to send email notification:", err));
+          if (asset && strategy) {
+            const emails = Array.isArray(recipients) ? recipients : [recipients];
+            emailService.sendSignalAlert(
+              emails,
+              asset.symbol,
+              strategy.name,
+              signal.type,
+              signal.price,
+              signal.ema50,
+              signal.ema200
+            ).catch(err => console.error("Failed to send email notification:", err));
+          }
         }
       }
 
@@ -476,19 +478,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       let testPassed = false;
+      const configData = config.config as Record<string, any>;
 
-      if (config.channel === "email" && config.settings?.emailAddresses) {
-        const emails = Array.isArray(config.settings.emailAddresses)
-          ? config.settings.emailAddresses
-          : [config.settings.emailAddresses];
+      if (config.channel === "email" && configData?.recipients) {
+        const emails = Array.isArray(configData.recipients)
+          ? configData.recipients
+          : [configData.recipients];
         
         testPassed = await emailService.sendTestEmail(emails[0]);
       } else if (config.channel === "sms") {
         console.log("SMS test not yet implemented");
         testPassed = false;
-      } else if (config.channel === "webhook" && config.settings?.webhookUrl) {
+      } else if (config.channel === "webhook" && configData?.url) {
         try {
-          const response = await fetch(config.settings.webhookUrl, {
+          const response = await fetch(configData.url, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ test: true, message: "SignalPro webhook test" }),
@@ -497,9 +500,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } catch (error) {
           testPassed = false;
         }
-      } else if (config.channel === "discord" && config.settings?.webhookUrl) {
+      } else if (config.channel === "discord" && configData?.webhookUrl) {
         try {
-          const response = await fetch(config.settings.webhookUrl, {
+          const response = await fetch(configData.webhookUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ content: "🧪 SignalPro Discord webhook test - Configuration successful!" }),
@@ -508,13 +511,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } catch (error) {
           testPassed = false;
         }
-      } else if (config.channel === "telegram" && config.settings?.botToken && config.settings?.chatId) {
+      } else if (config.channel === "telegram" && configData?.botToken && configData?.chatId) {
         try {
-          const response = await fetch(`https://api.telegram.org/bot${config.settings.botToken}/sendMessage`, {
+          const response = await fetch(`https://api.telegram.org/bot${configData.botToken}/sendMessage`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              chat_id: config.settings.chatId,
+              chat_id: configData.chatId,
               text: "🧪 SignalPro Telegram test - Configuration successful!",
             }),
           });
