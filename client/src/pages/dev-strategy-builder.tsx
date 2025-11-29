@@ -1,286 +1,309 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Code2, Play, Save, AlertCircle, CheckCircle2 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Play, Copy, Check } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Badge } from "@/components/ui/badge";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { DevLogsViewer } from "@/components/dev-logs-viewer";
+import { devLogger } from "@/lib/dev-logger";
+import { STRATEGY_VARIABLES, STRATEGY_OPERATORS, STRATEGY_FUNCTIONS } from "@/lib/strategy-variables";
+import { useToast } from "@/hooks/use-toast";
+
+const DEFAULT_FORMULA = `// Available variables:
+// price, ema50, ema200, high, low, open, close, volume
+
+// Example: Price above EMA50 AND EMA50 above EMA200
+price > ema50 && ema50 > ema200`;
 
 export default function DevStrategyBuilder() {
-  const [name, setName] = useState("");
+  const [name, setName] = useState("My Code Strategy");
   const [description, setDescription] = useState("");
-  const [timeframe, setTimeframe] = useState<"5m" | "15m">("5m");
-  const [formula, setFormula] = useState("");
-  const [validationResult, setValidationResult] = useState<{
-    valid: boolean;
-    message: string;
-  } | null>(null);
+  const [formula, setFormula] = useState(DEFAULT_FORMULA);
+  const [timeframe, setTimeframe] = useState("5m");
+  const formulaRef = useRef<HTMLTextAreaElement>(null);
   const { toast } = useToast();
 
-  const validateMutation = useMutation({
-    mutationFn: (code: string) =>
-      apiRequest("POST", "/api/strategies/validate", { formula: code }),
-    onSuccess: (data: any) => {
-      setValidationResult({ valid: true, message: data.message || "Formula is valid" });
-    },
-    onError: (error: any) => {
-      setValidationResult({ valid: false, message: error.message || "Invalid formula" });
-    },
-  });
-
-  const saveMutation = useMutation({
+  const createMutation = useMutation({
     mutationFn: (data: any) => apiRequest("POST", "/api/strategies", data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/strategies"] });
+      devLogger.info("Strategy created successfully", { name });
       toast({
         title: "Strategy created",
-        description: "Your custom strategy has been saved successfully.",
+        description: "Your code-based strategy has been created.",
       });
-      setName("");
-      setDescription("");
-      setFormula("");
-      setValidationResult(null);
     },
     onError: (error: any) => {
+      devLogger.error("Failed to create strategy", { error: error.message });
       toast({
         title: "Error",
-        description: error.message || "Failed to create strategy",
+        description: "Failed to create strategy.",
         variant: "destructive",
       });
     },
   });
 
-  const handleValidate = () => {
-    if (!formula.trim()) {
-      setValidationResult({ valid: false, message: "Formula cannot be empty" });
-      return;
+  const testFormula = () => {
+    devLogger.info("Testing formula", { formula });
+
+    try {
+      const testData = {
+        price: 100,
+        ema50: 99,
+        ema200: 98,
+        high: 102,
+        low: 99,
+        open: 100.5,
+        close: 100.25,
+        volume: 1500000,
+      };
+
+      const fn = new Function(
+        "price",
+        "ema50",
+        "ema200",
+        "high",
+        "low",
+        "open",
+        "close",
+        "volume",
+        `return ${formula}`
+      );
+
+      const result = fn(
+        testData.price,
+        testData.ema50,
+        testData.ema200,
+        testData.high,
+        testData.low,
+        testData.open,
+        testData.close,
+        testData.volume
+      );
+
+      devLogger.info("Formula result", { result, testData });
+
+      toast({
+        title: "Formula valid",
+        description: `Result: ${result}`,
+      });
+    } catch (error: any) {
+      devLogger.error("Formula error", { error: error.message });
+      toast({
+        title: "Formula error",
+        description: error.message,
+        variant: "destructive",
+      });
     }
-    validateMutation.mutate(formula);
   };
 
-  const handleSave = () => {
-    if (!name.trim() || !formula.trim()) {
+  const createStrategy = () => {
+    if (!name || !formula) {
+      devLogger.warn("Missing required fields", { name, formula });
       toast({
-        title: "Validation Error",
-        description: "Name and formula are required",
+        title: "Validation error",
+        description: "Please enter strategy name and formula.",
         variant: "destructive",
       });
       return;
     }
 
-    saveMutation.mutate({
+    devLogger.info("Creating strategy", { name, timeframe, formula });
+
+    createMutation.mutate({
       name,
       description,
+      type: `code_${Date.now()}`,
       timeframe,
-      type: "custom",
-      formula,
-      conditions: { custom: true },
-      enabled: true,
+      conditions: { formula },
       isCustom: true,
+      enabled: true,
+      formula: null,
     });
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <div className="flex items-center gap-2 mb-2">
-          <h1 className="text-2xl font-semibold" data-testid="heading-strategy-builder">
-            Strategy Builder
-          </h1>
-          <Badge variant="secondary">Developer Mode</Badge>
-        </div>
-        <p className="text-sm text-muted-foreground">
-          Create custom trading strategies using JavaScript-like formulas
-        </p>
+    <div className="space-y-6 hacker-mode">
+      <div className="space-y-2">
+        <h1 className="text-3xl font-bold text-green-400 font-mono">
+          DEV STRATEGY BUILDER
+        </h1>
+        <p className="text-green-300 text-sm">Write trading strategies in code</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Strategy Details</CardTitle>
-              <CardDescription>Basic information about your strategy</CardDescription>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-200px)]">
+        {/* Left: Code Editor */}
+        <div className="lg:col-span-2 space-y-4 flex flex-col">
+          <Card className="flex-1 flex flex-col border-l-4 border-l-green-500 bg-black">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-mono text-green-400">CODE EDITOR</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="flex-1 p-0 overflow-hidden">
+              <Textarea
+                ref={formulaRef}
+                value={formula}
+                onChange={(e) => setFormula(e.target.value)}
+                className="h-full min-h-96 rounded-none border-0 font-mono text-xs bg-black text-green-400 resize-none focus-visible:ring-0 focus-visible:ring-offset-0 p-4"
+                placeholder="Write your strategy formula..."
+                data-testid="textarea-formula"
+              />
+            </CardContent>
+          </Card>
+
+          <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-2">
               <div className="space-y-2">
-                <Label htmlFor="strategy-name">Strategy Name *</Label>
+                <Label htmlFor="strategy-name" className="text-green-400 text-xs font-mono">
+                  Strategy Name
+                </Label>
                 <Input
                   id="strategy-name"
-                  placeholder="My Custom Strategy"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
+                  className="bg-black border-green-500/30 text-green-400 text-sm font-mono"
                   data-testid="input-strategy-name"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="strategy-description">Description</Label>
-                <Textarea
-                  id="strategy-description"
-                  placeholder="Describe what your strategy does..."
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  rows={3}
-                  data-testid="textarea-strategy-description"
-                />
+                <Label htmlFor="timeframe" className="text-green-400 text-xs font-mono">
+                  Timeframe
+                </Label>
+                <select
+                  id="timeframe"
+                  value={timeframe}
+                  onChange={(e) => setTimeframe(e.target.value)}
+                  className="w-full px-3 py-2 rounded bg-black border border-green-500/30 text-green-400 text-sm font-mono"
+                >
+                  <option value="5m">5m</option>
+                  <option value="15m">15m</option>
+                </select>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="strategy-timeframe">Timeframe *</Label>
-                <Select value={timeframe} onValueChange={(v) => setTimeframe(v as "5m" | "15m")}>
-                  <SelectTrigger id="strategy-timeframe" data-testid="select-timeframe">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="5m">5 Minutes</SelectItem>
-                    <SelectItem value="15m">15 Minutes</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Available Variables</CardTitle>
-              <CardDescription>Use these in your formula</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2 text-sm font-mono">
-                <div className="flex items-center justify-between p-2 rounded-md bg-muted">
-                  <span className="text-muted-foreground">price</span>
-                  <span>Current candle close price</span>
-                </div>
-                <div className="flex items-center justify-between p-2 rounded-md bg-muted">
-                  <span className="text-muted-foreground">ema50</span>
-                  <span>50-period EMA value</span>
-                </div>
-                <div className="flex items-center justify-between p-2 rounded-md bg-muted">
-                  <span className="text-muted-foreground">ema200</span>
-                  <span>200-period EMA value</span>
-                </div>
-                <div className="flex items-center justify-between p-2 rounded-md bg-muted">
-                  <span className="text-muted-foreground">high</span>
-                  <span>Candle high price</span>
-                </div>
-                <div className="flex items-center justify-between p-2 rounded-md bg-muted">
-                  <span className="text-muted-foreground">low</span>
-                  <span>Candle low price</span>
-                </div>
-                <div className="flex items-center justify-between p-2 rounded-md bg-muted">
-                  <span className="text-muted-foreground">open</span>
-                  <span>Candle open price</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Example Formulas</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 text-xs font-mono">
-              <div className="p-3 rounded-md bg-muted space-y-1">
-                <div className="text-muted-foreground mb-2">Bullish crossover:</div>
-                <code className="block">price &gt; ema50 && ema50 &gt; ema200</code>
-              </div>
-              <div className="p-3 rounded-md bg-muted space-y-1">
-                <div className="text-muted-foreground mb-2">Price touches EMA:</div>
-                <code className="block">
-                  (low &lt;= ema200 && price &gt;= ema200) || price === ema200
-                </code>
-              </div>
-              <div className="p-3 rounded-md bg-muted space-y-1">
-                <div className="text-muted-foreground mb-2">Strong momentum:</div>
-                <code className="block">
-                  price &gt; ema50 * 1.02 && ema50 &gt; ema200
-                </code>
-              </div>
-            </CardContent>
-          </Card>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="description" className="text-green-400 text-xs font-mono">
+                Description (optional)
+              </Label>
+              <Input
+                id="description"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                className="bg-black border-green-500/30 text-green-400 text-sm font-mono"
+                placeholder="What does this strategy do?"
+                data-testid="input-description"
+              />
+            </div>
+            <div className="flex gap-2 pt-2">
+              <Button
+                onClick={testFormula}
+                className="flex-1 bg-green-600 hover:bg-green-700 text-black font-mono text-sm"
+                data-testid="button-test-formula"
+              >
+                <Play className="h-4 w-4 mr-2" />
+                Test Formula
+              </Button>
+              <Button
+                onClick={createStrategy}
+                disabled={createMutation.isPending}
+                className="flex-1 bg-green-500 hover:bg-green-600 text-black font-mono text-sm"
+                data-testid="button-create-strategy"
+              >
+                {createMutation.isPending ? "Creating..." : "Create Strategy"}
+              </Button>
+            </div>
+          </div>
         </div>
 
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <Code2 className="h-5 w-5" />
-                Formula Editor
-              </CardTitle>
-              <CardDescription>
-                Write your strategy logic using JavaScript expressions
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Textarea
-                placeholder="// Example: price > ema50 && ema50 > ema200"
-                value={formula}
-                onChange={(e) => {
-                  setFormula(e.target.value);
-                  setValidationResult(null);
-                }}
-                rows={12}
-                className="font-mono text-sm"
-                data-testid="textarea-formula"
-              />
-              <div className="flex items-center gap-2">
-                <Button
-                  onClick={handleValidate}
-                  disabled={validateMutation.isPending}
-                  variant="outline"
-                  size="sm"
-                  data-testid="button-validate"
-                >
-                  <Play className="h-4 w-4 mr-2" />
-                  {validateMutation.isPending ? "Validating..." : "Validate"}
-                </Button>
-                <Button
-                  onClick={handleSave}
-                  disabled={saveMutation.isPending || !name || !formula}
-                  size="sm"
-                  data-testid="button-save-strategy"
-                >
-                  <Save className="h-4 w-4 mr-2" />
-                  {saveMutation.isPending ? "Saving..." : "Save Strategy"}
-                </Button>
+        {/* Right: Reference & Logs */}
+        <div className="space-y-4 flex flex-col overflow-hidden">
+          <Tabs defaultValue="variables" className="flex-1 flex flex-col">
+            <TabsList className="grid w-full grid-cols-3 bg-black border-b border-green-500/30">
+              <TabsTrigger value="variables" className="text-green-300 data-[state=active]:text-green-400">
+                Variables
+              </TabsTrigger>
+              <TabsTrigger value="operators" className="text-green-300 data-[state=active]:text-green-400">
+                Operators
+              </TabsTrigger>
+              <TabsTrigger value="functions" className="text-green-300 data-[state=active]:text-green-400">
+                Functions
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="variables" className="flex-1 overflow-y-auto">
+              <div className="space-y-2 p-3">
+                {Object.entries(STRATEGY_VARIABLES).map(([key, value]) => (
+                  <div
+                    key={key}
+                    className="p-2 bg-black border border-green-500/20 rounded text-xs font-mono hover-elevate cursor-pointer"
+                    onClick={() => {
+                      if (formulaRef.current) {
+                        formulaRef.current.value += key;
+                        setFormula(formulaRef.current.value);
+                      }
+                    }}
+                  >
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="text-green-400 font-bold">{key}</span>
+                      <Badge variant="outline" className="text-xs text-green-300">
+                        {value.type}
+                      </Badge>
+                    </div>
+                    <p className="text-green-300/70 text-xs mt-1">{value.description}</p>
+                  </div>
+                ))}
               </div>
+            </TabsContent>
 
-              {validationResult && (
-                <Alert variant={validationResult.valid ? "default" : "destructive"}>
-                  {validationResult.valid ? (
-                    <CheckCircle2 className="h-4 w-4" />
-                  ) : (
-                    <AlertCircle className="h-4 w-4" />
-                  )}
-                  <AlertDescription>{validationResult.message}</AlertDescription>
-                </Alert>
-              )}
-            </CardContent>
-          </Card>
+            <TabsContent value="operators" className="flex-1 overflow-y-auto">
+              <div className="space-y-2 p-3">
+                {Object.entries(STRATEGY_OPERATORS).map(([key, value]) => (
+                  <div
+                    key={key}
+                    className="p-2 bg-black border border-green-500/20 rounded text-xs font-mono hover-elevate cursor-pointer"
+                    onClick={() => {
+                      if (formulaRef.current) {
+                        formulaRef.current.value += ` ${key} `;
+                        setFormula(formulaRef.current.value);
+                      }
+                    }}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="text-yellow-400 font-bold">{key}</span>
+                      <span className="text-green-300/70">{value}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </TabsContent>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Formula Guidelines</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2 text-sm text-muted-foreground">
-              <p>• Return true when signal conditions are met</p>
-              <p>• Use comparison operators: &gt;, &lt;, &gt;=, &lt;=, ===, !==</p>
-              <p>• Combine conditions with && (AND) or || (OR)</p>
-              <p>• Use arithmetic operators: +, -, *, /, %</p>
-              <p>• Formula must be a valid JavaScript expression</p>
-              <p>• Avoid complex logic; keep formulas simple and readable</p>
-            </CardContent>
-          </Card>
+            <TabsContent value="functions" className="flex-1 overflow-y-auto">
+              <div className="space-y-2 p-3">
+                {Object.entries(STRATEGY_FUNCTIONS).map(([key, value]) => (
+                  <div
+                    key={key}
+                    className="p-2 bg-black border border-green-500/20 rounded text-xs font-mono hover-elevate cursor-pointer"
+                    onClick={() => {
+                      if (formulaRef.current) {
+                        formulaRef.current.value += key;
+                        setFormula(formulaRef.current.value);
+                      }
+                    }}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="text-blue-400 font-bold">{key}</span>
+                      <span className="text-green-300/70">{value}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </TabsContent>
+          </Tabs>
+
+          <DevLogsViewer />
         </div>
       </div>
     </div>

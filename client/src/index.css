@@ -122,6 +122,41 @@
   --destructive-foreground: 0 84% 98%;
   --input: 210 20% 24%;
   --ring: 210 100% 60%;
+}
+
+.hacker-mode {
+  --background: 120 100% 5%;
+  --foreground: 120 100% 50%;
+  --border: 120 100% 30%;
+  --card: 120 100% 3%;
+  --card-foreground: 120 100% 50%;
+  --card-border: 120 100% 25%;
+  --sidebar: 120 100% 4%;
+  --sidebar-foreground: 120 100% 50%;
+  --sidebar-border: 120 100% 25%;
+  --sidebar-primary: 120 100% 35%;
+  --sidebar-primary-foreground: 120 100% 98%;
+  --sidebar-accent: 120 80% 15%;
+  --sidebar-accent-foreground: 120 100% 50%;
+  --sidebar-ring: 120 100% 50%;
+  --popover: 120 100% 5%;
+  --popover-foreground: 120 100% 50%;
+  --popover-border: 120 100% 25%;
+  --primary: 120 100% 50%;
+  --primary-foreground: 120 100% 3%;
+  --secondary: 120 80% 15%;
+  --secondary-foreground: 120 100% 50%;
+  --muted: 120 80% 10%;
+  --muted-foreground: 120 80% 40%;
+  --accent: 120 100% 20%;
+  --accent-foreground: 120 100% 50%;
+  --destructive: 0 100% 50%;
+  --destructive-foreground: 0 100% 98%;
+  --input: 120 100% 10%;
+  --ring: 120 100% 50%;
+}
+
+:root {
   --chart-1: 210 85% 65%;
   --chart-2: 168 76% 58%;
   --chart-3: 32 95% 62%;
