@@ -57,11 +57,29 @@ const assetFormSchema = z.object({
 
 type AssetFormData = z.infer<typeof assetFormSchema>;
 
+const PRESET_ASSETS = [
+  { symbol: "RELIANCE", name: "Reliance Industries", type: "indian_stock", exchange: "NSE" },
+  { symbol: "TCS", name: "Tata Consultancy Services", type: "indian_stock", exchange: "NSE" },
+  { symbol: "HDFC", name: "HDFC Bank", type: "indian_stock", exchange: "NSE" },
+  { symbol: "INFY", name: "Infosys", type: "indian_stock", exchange: "NSE" },
+  { symbol: "WIPRO", name: "Wipro", type: "indian_stock", exchange: "NSE" },
+  { symbol: "BAJAJFINSV", name: "Bajaj Finserv", type: "indian_stock", exchange: "NSE" },
+  { symbol: "NIFTYNXT50", name: "Nifty Next 50", type: "indian_futures", exchange: "NSE" },
+  { symbol: "BANKNIFTY", name: "Bank Nifty", type: "indian_futures", exchange: "NSE" },
+  { symbol: "NIFTY50", name: "Nifty 50", type: "indian_futures", exchange: "NSE" },
+  { symbol: "EURUSD", name: "Euro / US Dollar", type: "forex", exchange: "FOREX" },
+  { symbol: "GBPUSD", name: "British Pound / US Dollar", type: "forex", exchange: "FOREX" },
+  { symbol: "USDJPY", name: "US Dollar / Japanese Yen", type: "forex", exchange: "FOREX" },
+  { symbol: "AUDUSD", name: "Australian Dollar / US Dollar", type: "forex", exchange: "FOREX" },
+  { symbol: "USDINR", name: "US Dollar / Indian Rupee", type: "forex", exchange: "FOREX" },
+];
+
 export default function Assets() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [activeTab, setActiveTab] = useState("indian");
+  const [assetSearchQuery, setAssetSearchQuery] = useState("");
   const { toast } = useToast();
 
   const form = useForm<AssetFormData>({
@@ -124,6 +142,22 @@ export default function Assets() {
 
   const onSubmit = (data: AssetFormData) => {
     createMutation.mutate(data);
+  };
+
+  const filteredPresetAssets = PRESET_ASSETS.filter((preset) => {
+    const alreadyExists = assets.some((a) => a.symbol === preset.symbol);
+    const matchesSearch =
+      preset.symbol.toLowerCase().includes(assetSearchQuery.toLowerCase()) ||
+      preset.name.toLowerCase().includes(assetSearchQuery.toLowerCase());
+    return matchesSearch && !alreadyExists;
+  });
+
+  const addPresetAsset = (preset: typeof PRESET_ASSETS[0]) => {
+    form.setValue("symbol", preset.symbol);
+    form.setValue("name", preset.name);
+    form.setValue("type", preset.type as any);
+    form.setValue("exchange", preset.exchange);
+    setAssetSearchQuery("");
   };
 
   const handleToggleAsset = (asset: Asset) => {
@@ -459,13 +493,66 @@ export default function Assets() {
       )}
 
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Add Asset</DialogTitle>
             <DialogDescription>
-              Add a new stock or forex pair to track
+              Search and add a stock, future, or forex pair to track
             </DialogDescription>
           </DialogHeader>
+
+          {/* Search Preset Assets */}
+          <div className="space-y-2">
+            <Label htmlFor="asset-search">Search Assets</Label>
+            <div className="flex gap-2">
+              <Search className="h-4 w-4 text-muted-foreground mt-2.5" />
+              <Input
+                id="asset-search"
+                placeholder="Search symbols or names (e.g., RELIANCE, EUR)"
+                value={assetSearchQuery}
+                onChange={(e) => setAssetSearchQuery(e.target.value)}
+                data-testid="input-asset-search"
+              />
+            </div>
+          </div>
+
+          {/* Preset Assets List */}
+          {assetSearchQuery && (
+            <div className="space-y-2 max-h-48 overflow-y-auto border rounded-md p-3 bg-muted/20">
+              {filteredPresetAssets.length > 0 ? (
+                filteredPresetAssets.map((preset) => (
+                  <button
+                    key={preset.symbol}
+                    onClick={() => addPresetAsset(preset)}
+                    className="w-full text-left p-2 rounded-md hover:bg-muted transition-colors border border-transparent hover:border-border"
+                    data-testid={`button-add-preset-${preset.symbol}`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="font-mono font-bold text-sm text-primary">{preset.symbol}</div>
+                        <div className="text-xs text-muted-foreground truncate">{preset.name}</div>
+                      </div>
+                      <Badge variant="outline" className="text-xs flex-shrink-0">
+                        {preset.type === "indian_stock" ? "Stock" : preset.type === "indian_futures" ? "Futures" : "Forex"}
+                      </Badge>
+                    </div>
+                  </button>
+                ))
+              ) : assetSearchQuery.length > 0 ? (
+                <p className="text-sm text-muted-foreground py-2">No matching assets found</p>
+              ) : null}
+            </div>
+          )}
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-background px-2 text-muted-foreground">Or add manually</span>
+            </div>
+          </div>
+
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               <FormField
@@ -545,7 +632,10 @@ export default function Assets() {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => setIsAddDialogOpen(false)}
+                  onClick={() => {
+                    setIsAddDialogOpen(false);
+                    setAssetSearchQuery("");
+                  }}
                   data-testid="button-cancel"
                 >
                   Cancel
