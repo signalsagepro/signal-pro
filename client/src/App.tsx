@@ -19,9 +19,10 @@ import Signals from "@/pages/signals";
 import ConfigBrokers from "@/pages/config-brokers";
 import ConfigNotifications from "@/pages/config-notifications";
 import Users from "@/pages/users";
+import DevLogs from "@/pages/dev-logs";
 import DevStrategyBuilder from "@/pages/dev-strategy-builder";
 
-function Router({ devMode, isAdmin }: { devMode: boolean; isAdmin: boolean }) {
+function Router({ devMode, superDevMode, isAdmin }: { devMode: boolean; superDevMode: boolean; isAdmin: boolean }) {
   return (
     <Switch>
       <Route path="/" component={Dashboard} />
@@ -31,7 +32,8 @@ function Router({ devMode, isAdmin }: { devMode: boolean; isAdmin: boolean }) {
       {isAdmin && <Route path="/config/brokers" component={ConfigBrokers} />}
       {isAdmin && <Route path="/config/notifications" component={ConfigNotifications} />}
       {isAdmin && <Route path="/users" component={Users} />}
-      {devMode && isAdmin && <Route path="/dev/strategy-builder" component={DevStrategyBuilder} />}
+      {devMode && isAdmin && <Route path="/dev/logs" component={DevLogs} />}
+      {superDevMode && isAdmin && <Route path="/dev/strategy-builder" component={DevStrategyBuilder} />}
       <Route component={NotFound} />
     </Switch>
   );
@@ -61,6 +63,7 @@ function AuthGuard() {
 function ProtectedLayout() {
   const { user } = useAuth();
   const [devMode, setDevMode] = useState(false);
+  const [superDevMode, setSuperDevMode] = useState(false);
   const [logoClickCount, setLogoClickCount] = useState(0);
   const [lastClickTime, setLastClickTime] = useState(0);
 
@@ -75,8 +78,15 @@ function ProtectedLayout() {
       const newCount = logoClickCount + 1;
       setLogoClickCount(newCount);
 
-      if (newCount === 7) {
+      if (newCount === 7 && !devMode) {
         setDevMode(true);
+        setLogoClickCount(0);
+      } else if (newCount === 7 && devMode && !superDevMode) {
+        setSuperDevMode(true);
+        setLogoClickCount(0);
+      } else if (newCount === 7 && devMode && superDevMode) {
+        setDevMode(false);
+        setSuperDevMode(false);
         setLogoClickCount(0);
       }
     }
@@ -90,20 +100,22 @@ function ProtectedLayout() {
   };
 
   return (
-    <SidebarProvider style={style as React.CSSProperties}>
-      <div className="flex h-screen w-full">
-        <AppSidebar devMode={devMode} onLogoClick={handleLogoClick} />
-        <div className="flex flex-col flex-1">
-          <header className="flex items-center justify-between p-4 border-b gap-4">
-            <SidebarTrigger data-testid="button-sidebar-toggle" />
-            <ThemeToggle />
-          </header>
-          <main className="flex-1 overflow-auto p-6">
-            <Router devMode={devMode} isAdmin={user?.role === "admin"} />
-          </main>
+    <div className={devMode ? "hacker-mode" : ""}>
+      <SidebarProvider style={style as React.CSSProperties}>
+        <div className="flex h-screen w-full">
+          <AppSidebar devMode={devMode} superDevMode={superDevMode} onLogoClick={handleLogoClick} />
+          <div className="flex flex-col flex-1">
+            <header className="flex items-center justify-between p-4 border-b gap-4">
+              <SidebarTrigger data-testid="button-sidebar-toggle" />
+              <ThemeToggle />
+            </header>
+            <main className="flex-1 overflow-auto p-6">
+              <Router devMode={devMode} superDevMode={superDevMode} isAdmin={user?.role === "admin"} />
+            </main>
+          </div>
         </div>
-      </div>
-    </SidebarProvider>
+      </SidebarProvider>
+    </div>
   );
 }
 

@@ -18,6 +18,7 @@ import { useAuth } from "@/hooks/use-auth";
 
 interface AppSidebarProps {
   devMode: boolean;
+  superDevMode: boolean;
   onLogoClick: () => void;
 }
 
@@ -72,7 +73,7 @@ const adminNavItems = [
   },
 ];
 
-export function AppSidebar({ devMode, onLogoClick }: AppSidebarProps) {
+export function AppSidebar({ devMode, superDevMode, onLogoClick }: AppSidebarProps) {
   const [location] = useLocation();
   const { user, logout } = useAuth();
 
@@ -176,15 +177,29 @@ export function AppSidebar({ devMode, onLogoClick }: AppSidebarProps) {
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     asChild
-                    isActive={location === "/dev/strategy-builder"}
-                    data-testid="link-dev-strategy-builder"
+                    isActive={location === "/dev/logs"}
+                    data-testid="link-dev-logs"
                   >
-                    <Link href="/dev/strategy-builder">
+                    <Link href="/dev/logs">
                       <Code2 className="h-4 w-4" />
-                      <span>Strategy Builder</span>
+                      <span>Logs</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
+                {superDevMode && (
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={location === "/dev/strategy-builder"}
+                      data-testid="link-dev-strategy-builder"
+                    >
+                      <Link href="/dev/strategy-builder">
+                        <Code2 className="h-4 w-4" />
+                        <span>Strategy Builder</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                )}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
