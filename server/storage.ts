@@ -190,6 +190,8 @@ export class MemStorage implements IStorage {
     const asset: Asset = {
       ...insertAsset,
       id,
+      exchange: insertAsset.exchange ?? null,
+      enabled: insertAsset.enabled ?? true,
       createdAt: new Date(),
     };
     this.assets.set(id, asset);

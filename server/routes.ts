@@ -5,6 +5,7 @@ import { storage } from "./storage";
 import { z } from "zod";
 import { insertAssetSchema, insertStrategySchema, insertSignalSchema, insertUserSchema } from "@shared/schema";
 import { marketDataGenerator } from "./services/market-data-generator";
+import { emailService } from "./services/email-service";
 
 const clients = new Set<WebSocket>();
 
@@ -344,6 +345,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const data = insertSignalSchema.parse(req.body);
       const signal = await storage.createSignal(data);
       broadcastSignal(signal);
+
+      // Send email notifications if enabled
+      const notificationConfigs = await storage.getNotificationConfigs();
+      const emailConfig = notificationConfigs.find(c => c.channel === "email" && c.enabled);
+      
+      if (emailConfig && emailConfig.settings?.emailAddresses) {
+        const asset = await storage.getAsset(signal.assetId);
+        const strategy = await storage.getStrategy(signal.strategyId);
+        
+        if (asset && strategy) {
+          const emails = Array.isArray(emailConfig.settings.emailAddresses) 
+            ? emailConfig.settings.emailAddresses 
+            : [emailConfig.settings.emailAddresses];
+          
+          emailService.sendSignalAlert(
+            emails,
+            asset.symbol,
+            strategy.name,
+            signal.type,
+            signal.price,
+            signal.ema50,
+            signal.ema200
+          ).catch(err => console.error("Failed to send email notification:", err));
+        }
+      }
+
       res.status(201).json(signal);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -448,12 +475,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return;
       }
 
+      let testPassed = false;
+
+      if (config.channel === "email" && config.settings?.emailAddresses) {
+        const emails = Array.isArray(config.settings.emailAddresses)
+          ? config.settings.emailAddresses
+          : [config.settings.emailAddresses];
+        
+        testPassed = await emailService.sendTestEmail(emails[0]);
+      } else if (config.channel === "sms") {
+        console.log("SMS test not yet implemented");
+        testPassed = false;
+      } else if (config.channel === "webhook" && config.settings?.webhookUrl) {
+        try {
+          const response = await fetch(config.settings.webhookUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ test: true, message: "SignalPro webhook test" }),
+          });
+          testPassed = response.ok;
+        } catch (error) {
+          testPassed = false;
+        }
+      } else if (config.channel === "discord" && config.settings?.webhookUrl) {
+        try {
+          const response = await fetch(config.settings.webhookUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ content: "🧪 SignalPro Discord webhook test - Configuration successful!" }),
+          });
+          testPassed = response.ok;
+        } catch (error) {
+          testPassed = false;
+        }
+      } else if (config.channel === "telegram" && config.settings?.botToken && config.settings?.chatId) {
+        try {
+          const response = await fetch(`https://api.telegram.org/bot${config.settings.botToken}/sendMessage`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              chat_id: config.settings.chatId,
+              text: "🧪 SignalPro Telegram test - Configuration successful!",
+            }),
+          });
+          testPassed = response.ok;
+        } catch (error) {
+          testPassed = false;
+        }
+      }
+
       await storage.updateNotificationConfig(id, {
-        testStatus: "success",
+        testStatus: testPassed ? "success" : "failed",
         lastTested: new Date(),
       });
 
-      res.json({ success: true, message: "Test notification sent" });
+      if (testPassed) {
+        res.json({ success: true, message: "Test notification sent successfully" });
+      } else {
+        res.status(400).json({ success: false, error: "Test notification failed - check configuration" });
+      }
     } catch (error) {
       res.status(500).json({ error: "Test notification failed" });
     }
