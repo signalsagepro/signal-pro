@@ -133,9 +133,34 @@ Currently, the application does not implement authentication. The architecture i
 - **Replit Plugins**: Development tooling for Replit environment (cartographer, dev banner, runtime error overlay)
 - **ESBuild**: JavaScript bundler for production server code
 
-### Planned Integrations (Not Yet Implemented)
+### Notification System (Implemented)
+
+**Multi-Channel Notifications:**
+- **Email**: Supports multiple providers:
+  - SendGrid (professional email service)
+  - Resend (modern email API)
+  - Gmail (personal Gmail account)
+  - Outlook (Outlook account)
+  - Custom SMTP (any SMTP server via env vars: SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD)
+- **SMS**: Twilio integration (set Twilio Account SID, Auth Token, phone numbers)
+- **Discord**: Webhook-based integration (just need webhook URL)
+- **Telegram**: Bot API integration (need Bot Token and Chat ID)
+- **Webhook**: Custom webhook URL (supports custom headers for authentication)
+
+**Configuration Steps:**
+1. Admin users navigate to Configuration → Notifications
+2. Each channel displays step-by-step setup instructions
+3. Enter required credentials/URLs in configuration fields
+4. Click "Test Notification" to verify setup
+5. Toggle "Enable Notifications" to activate channel
+
+**Email Setup Options:**
+- For production, use SendGrid or Resend via Replit integrations
+- For development/testing, use custom SMTP or Gmail/Outlook
+- Set environment variables for SMTP or use integration connectors
+
+### Pending Integrations
 - **Broker APIs**: Zerodha Kite, Upstox, Angel One, OANDA, Interactive Brokers, FXCM
-- **Notification Services**: Email (SMTP), SMS (Twilio), Discord webhooks, Telegram bots
 - **Market Data Providers**: Real-time price feeds (currently using simulated data)
 
 ### Styling & Utilities

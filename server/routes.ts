@@ -486,9 +486,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
           : [configData.recipients];
         
         testPassed = await emailService.sendTestEmail(emails[0]);
-      } else if (config.channel === "sms") {
-        console.log("SMS test not yet implemented");
-        testPassed = false;
+      } else if (config.channel === "sms" && configData?.twilioAccountSid && configData?.twilioAuthToken && configData?.phoneNumbers) {
+        try {
+          const phoneNumbers = Array.isArray(configData.phoneNumbers) 
+            ? configData.phoneNumbers 
+            : [configData.phoneNumbers];
+          
+          if (phoneNumbers.length > 0) {
+            const accountSid = configData.twilioAccountSid;
+            const authToken = configData.twilioAuthToken;
+            const auth = Buffer.from(`${accountSid}:${authToken}`).toString("base64");
+            
+            const response = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`, {
+              method: "POST",
+              headers: {
+                "Authorization": `Basic ${auth}`,
+                "Content-Type": "application/x-www-form-urlencoded",
+              },
+              body: new URLSearchParams({
+                "To": phoneNumbers[0],
+                "From": process.env.TWILIO_PHONE_NUMBER || "",
+                "Body": "Test SMS from SignalPro - Configuration successful!",
+              }).toString(),
+            });
+            testPassed = response.ok;
+          }
+        } catch (error) {
+          testPassed = false;
+        }
       } else if (config.channel === "webhook" && configData?.url) {
         try {
           const response = await fetch(configData.url, {

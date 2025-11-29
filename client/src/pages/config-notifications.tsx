@@ -21,9 +21,14 @@ const NOTIFICATION_CHANNELS = [
     name: "Email",
     icon: Mail,
     description: "Receive signals via email",
+    setupGuide: `Choose one email service:
+1. **SendGrid** - Professional email service (recommended for production)
+2. **Resend** - Modern email API
+3. **Gmail** - Your personal Gmail account
+4. **Outlook** - Your Outlook account
+5. **Custom SMTP** - Any SMTP server (set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD env vars)`,
     fields: [
       { key: "recipients", label: "Email Recipients", type: "array-email", placeholder: "your@email.com" },
-      { key: "from", label: "From Address", type: "email", placeholder: "signals@signalpro.com" },
     ],
   },
   {
@@ -31,9 +36,14 @@ const NOTIFICATION_CHANNELS = [
     name: "SMS",
     icon: MessageSquare,
     description: "Get SMS notifications for signals",
+    setupGuide: `To use SMS notifications:
+1. Sign up at Twilio (https://www.twilio.com)
+2. Get your Account SID and Auth Token
+3. Get a Twilio phone number
+4. Enter your configuration below`,
     fields: [
       { key: "phoneNumbers", label: "Phone Numbers", type: "array-tel", placeholder: "+1234567890" },
-      { key: "twilioAccountSid", label: "Twilio Account SID", type: "text", placeholder: "ACxxxx" },
+      { key: "twilioAccountSid", label: "Twilio Account SID", type: "password", placeholder: "ACxxxx" },
       { key: "twilioAuthToken", label: "Twilio Auth Token", type: "password", placeholder: "Your auth token" },
     ],
   },
@@ -42,6 +52,11 @@ const NOTIFICATION_CHANNELS = [
     name: "Webhook",
     icon: Webhook,
     description: "Send signals to a custom webhook URL",
+    setupGuide: `To use webhooks:
+1. Prepare a URL that can receive POST requests
+2. (Optional) Configure custom headers for authentication
+3. Enter your webhook URL and test
+4. You'll receive signals as JSON POST requests`,
     fields: [
       { key: "url", label: "Webhook URL", type: "url", placeholder: "https://your-webhook.com/signals" },
       { key: "headers", label: "Custom Headers (JSON)", type: "textarea", placeholder: '{"Authorization": "Bearer token"}' },
@@ -52,6 +67,12 @@ const NOTIFICATION_CHANNELS = [
     name: "Discord",
     icon: MessageSquare,
     description: "Post signals to a Discord channel",
+    setupGuide: `To set up Discord:
+1. Go to your Discord server settings
+2. Go to "Webhooks" under "Integrations"
+3. Click "New Webhook" and select a channel
+4. Copy the webhook URL
+5. Paste it below and test`,
     fields: [
       { key: "webhookUrl", label: "Discord Webhook URL", type: "url", placeholder: "https://discord.com/api/webhooks/..." },
     ],
@@ -61,6 +82,11 @@ const NOTIFICATION_CHANNELS = [
     name: "Telegram",
     icon: MessageSquare,
     description: "Get signal notifications via Telegram",
+    setupGuide: `To set up Telegram:
+1. Create a bot with @BotFather on Telegram
+2. Copy your Bot Token
+3. Message your bot and get your Chat ID (use /getid in a group or direct message)
+4. Enter both below and test`,
     fields: [
       { key: "botToken", label: "Bot Token", type: "password", placeholder: "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11" },
       { key: "chatId", label: "Chat ID", type: "text", placeholder: "123456789" },
@@ -185,6 +211,11 @@ function ConfigNotificationsContent() {
             )}
           </div>
         </CardHeader>
+        {channelInfo.setupGuide && (
+          <div className="px-6 py-3 bg-muted/50 border-b">
+            <p className="text-xs text-muted-foreground whitespace-pre-line">{channelInfo.setupGuide}</p>
+          </div>
+        )}
         <CardContent className="space-y-4">
           {channelInfo.fields.map((field) => {
             const isArrayField = field.type.startsWith("array-");
