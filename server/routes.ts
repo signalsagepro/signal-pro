@@ -354,7 +354,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const configData = emailConfig.config as Record<string, any>;
         const recipients = configData.recipients;
         
-        if (recipients && (Array.isArray(recipients) ? recipients.length > 0 : recipients)) {
+        if (recipients && (Array.isArray(recipients) ? recipients.length > 0 : recipients) && 
+            configData.smtpHost && configData.smtpPort && configData.smtpUser && configData.smtpPassword) {
           const asset = await storage.getAsset(signal.assetId);
           const strategy = await storage.getStrategy(signal.strategyId);
           
@@ -367,7 +368,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
               signal.type,
               signal.price,
               signal.ema50,
-              signal.ema200
+              signal.ema200,
+              {
+                smtpHost: configData.smtpHost,
+                smtpPort: parseInt(configData.smtpPort),
+                smtpUser: configData.smtpUser,
+                smtpPassword: configData.smtpPassword,
+                fromEmail: configData.fromEmail || 'noreply@signalpro.com',
+              }
             ).catch(err => console.error("Failed to send email notification:", err));
           }
         }
@@ -480,12 +488,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let testPassed = false;
       const configData = config.config as Record<string, any>;
 
-      if (config.channel === "email" && configData?.recipients) {
+      if (config.channel === "email" && configData?.recipients && configData?.smtpHost && configData?.smtpPort && configData?.smtpUser && configData?.smtpPassword) {
         const emails = Array.isArray(configData.recipients)
           ? configData.recipients
           : [configData.recipients];
         
-        testPassed = await emailService.sendTestEmail(emails[0]);
+        testPassed = await emailService.sendTestEmail(emails[0], {
+          smtpHost: configData.smtpHost,
+          smtpPort: parseInt(configData.smtpPort),
+          smtpUser: configData.smtpUser,
+          smtpPassword: configData.smtpPassword,
+          fromEmail: configData.fromEmail || 'noreply@signalpro.com',
+        });
       } else if (config.channel === "sms" && configData?.twilioAccountSid && configData?.twilioAuthToken && configData?.phoneNumbers) {
         try {
           const phoneNumbers = Array.isArray(configData.phoneNumbers) 

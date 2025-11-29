@@ -21,14 +21,13 @@ const NOTIFICATION_CHANNELS = [
     name: "Email",
     icon: Mail,
     description: "Receive signals via email",
-    setupGuide: `Choose one email service:
-1. **SendGrid** - Professional email service (recommended for production)
-2. **Resend** - Modern email API
-3. **Gmail** - Your personal Gmail account
-4. **Outlook** - Your Outlook account
-5. **Custom SMTP** - Any SMTP server (set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD env vars)`,
     fields: [
       { key: "recipients", label: "Email Recipients", type: "array-email", placeholder: "your@email.com" },
+      { key: "smtpHost", label: "SMTP Host", type: "text", placeholder: "smtp.gmail.com" },
+      { key: "smtpPort", label: "SMTP Port", type: "number", placeholder: "587" },
+      { key: "smtpUser", label: "SMTP Username", type: "email", placeholder: "your-email@gmail.com" },
+      { key: "smtpPassword", label: "SMTP Password", type: "password", placeholder: "Your app password or password" },
+      { key: "fromEmail", label: "From Email Address", type: "email", placeholder: "noreply@signalpro.com" },
     ],
   },
   {
@@ -213,32 +212,35 @@ function ConfigNotificationsContent() {
                 <CardDescription className="text-sm">{channelInfo.description}</CardDescription>
               </div>
             </div>
-            {config?.testStatus === "success" && config?.lastTested && (
-              <Badge variant="default" className="text-xs gap-1">
-                <CheckCircle2 className="h-3 w-3" />
-                Tested
-              </Badge>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4 pt-4">
-          {!showSettings ? (
-            <div className="flex flex-col items-center justify-center gap-4 py-6">
+            <div className="flex items-center gap-2">
+              {config?.testStatus === "success" && config?.lastTested && (
+                <Badge variant="default" className="text-xs gap-1">
+                  <CheckCircle2 className="h-3 w-3" />
+                  Tested
+                </Badge>
+              )}
               <Button
                 size="icon"
                 variant="outline"
                 onClick={() => setShowSettings(true)}
-                className={`h-12 w-12 rounded-full border-2 transition-all ${
+                className={`h-9 w-9 rounded-full border-2 transition-all ${
                   Object.keys(configData).length > 0 
                     ? "border-green-500 hover:bg-green-50 dark:hover:bg-green-950" 
                     : "border-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-950"
                 }`}
                 data-testid={`button-settings-${channelInfo.channel}`}
               >
-                <Settings className={`h-6 w-6 ${
+                <Settings className={`h-4 w-4 ${
                   Object.keys(configData).length > 0 ? "text-green-500" : "text-yellow-500"
                 }`} />
               </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4 pt-4">
+          {!showSettings ? (
+            <div className="text-sm text-muted-foreground py-4">
+              {Object.keys(configData).length > 0 ? "Configured" : "Click the gear icon to configure"}
             </div>
           ) : (
             <div className="space-y-4 py-2">

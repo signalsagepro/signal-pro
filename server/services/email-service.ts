@@ -1,38 +1,40 @@
 import nodemailer from 'nodemailer';
 
+export interface SmtpConfig {
+  smtpHost: string;
+  smtpPort: number;
+  smtpUser: string;
+  smtpPassword: string;
+  fromEmail: string;
+}
+
 // Email service for sending notifications
 export class EmailService {
-  private transporter: any;
-
-  constructor() {
-    const smtpHost = process.env.SMTP_HOST || 'localhost';
-    const smtpPort = parseInt(process.env.SMTP_PORT || '587');
-    const smtpUser = process.env.SMTP_USER || '';
-    const smtpPass = process.env.SMTP_PASSWORD || '';
-    const smtpFrom = process.env.SMTP_FROM || 'noreply@signalpro.com';
-
-    if (!smtpHost) {
-      console.warn('⚠️ SMTP_HOST not configured. Email notifications will not work.');
-    }
-
-    this.transporter = nodemailer.createTransport({
-      host: smtpHost,
-      port: smtpPort,
-      secure: smtpPort === 465,
-      auth: smtpUser && smtpPass ? {
-        user: smtpUser,
-        pass: smtpPass,
+  private createTransporter(config: SmtpConfig) {
+    return nodemailer.createTransport({
+      host: config.smtpHost,
+      port: config.smtpPort,
+      secure: config.smtpPort === 465,
+      auth: config.smtpUser && config.smtpPassword ? {
+        user: config.smtpUser,
+        pass: config.smtpPassword,
       } : undefined,
     });
   }
 
-  async sendSignalAlert(emails: string[], assetSymbol: string, strategyName: string, signalType: string, price: number, ema50: number, ema200: number): Promise<boolean> {
+  async sendSignalAlert(emails: string[], assetSymbol: string, strategyName: string, signalType: string, price: number, ema50: number, ema200: number, config?: SmtpConfig): Promise<boolean> {
     if (!emails || emails.length === 0) {
       console.log('No email recipients configured');
       return false;
     }
 
+    if (!config) {
+      console.error('No SMTP config provided');
+      return false;
+    }
+
     try {
+      const transporter = this.createTransporter(config);
       const subject = `🚨 Trading Signal: ${assetSymbol} - ${strategyName}`;
       
       const htmlContent = `
@@ -106,8 +108,8 @@ EMA 200: $${ema200.toFixed(2)}
 Visit your SignalPro dashboard for more details.
       `;
 
-      const info = await this.transporter.sendMail({
-        from: process.env.SMTP_FROM || 'noreply@signalpro.com',
+      const info = await transporter.sendMail({
+        from: config.fromEmail,
         to: emails.join(','),
         subject: subject,
         text: textContent,
@@ -122,14 +124,20 @@ Visit your SignalPro dashboard for more details.
     }
   }
 
-  async sendTestEmail(email: string): Promise<boolean> {
+  async sendTestEmail(email: string, config?: SmtpConfig): Promise<boolean> {
     if (!email) {
       return false;
     }
 
+    if (!config) {
+      console.error('No SMTP config provided');
+      return false;
+    }
+
     try {
-      const info = await this.transporter.sendMail({
-        from: process.env.SMTP_FROM || 'noreply@signalpro.com',
+      const transporter = this.createTransporter(config);
+      const info = await transporter.sendMail({
+        from: config.fromEmail,
         to: email,
         subject: '✅ SignalPro Email Test',
         html: `
