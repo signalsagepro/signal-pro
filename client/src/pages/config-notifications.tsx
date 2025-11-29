@@ -98,6 +98,7 @@ interface NotificationCardState {
   [key: string]: {
     enabled: boolean;
     configData: Record<string, string | string[]>;
+    showSettings: boolean;
   };
 }
 
@@ -166,10 +167,12 @@ function ConfigNotificationsContent() {
     const cardState = cardStates[channelKey] || {
       enabled: config?.enabled || false,
       configData: (config?.config as Record<string, string | string[]>) || {},
+      showSettings: false,
     };
     
     const enabled = cardState.enabled;
     const configData = cardState.configData;
+    const showSettings = cardState.showSettings;
     
     const setEnabled = (value: boolean) => {
       setCardStates({
@@ -182,6 +185,13 @@ function ConfigNotificationsContent() {
       setCardStates({
         ...cardStates,
         [channelKey]: { ...cardState, configData: data },
+      });
+    };
+
+    const setShowSettings = (show: boolean) => {
+      setCardStates({
+        ...cardStates,
+        [channelKey]: { ...cardState, showSettings: show },
       });
     };
 
@@ -211,82 +221,108 @@ function ConfigNotificationsContent() {
             )}
           </div>
         </CardHeader>
-        {channelInfo.setupGuide && (
-          <div className="px-6 py-3 bg-muted/50 border-b">
-            <p className="text-xs text-muted-foreground whitespace-pre-line">{channelInfo.setupGuide}</p>
-          </div>
-        )}
-        <CardContent className="space-y-4">
-          {channelInfo.fields.map((field) => {
-            const isArrayField = field.type.startsWith("array-");
-            const baseType = isArrayField ? field.type.split("-")[1] : field.type;
-            const arrayValue = isArrayField ? (Array.isArray(configData[field.key]) ? configData[field.key] : []) : [];
-            
-            return (
-              <div key={field.key} className="space-y-2">
-                <Label htmlFor={`${channelInfo.channel}-${field.key}`}>{field.label}</Label>
-                {isArrayField ? (
-                  <div className="space-y-2">
-                    {(arrayValue as string[]).map((item, idx) => (
-                      <div key={idx} className="flex gap-2">
-                        <Input
-                          type={baseType}
-                          placeholder={field.placeholder}
-                          value={item}
-                          onChange={(e) => {
-                            const newArray = [...(arrayValue as string[])];
-                            newArray[idx] = e.target.value;
-                            setConfigData({ ...configData, [field.key]: newArray });
-                          }}
-                          data-testid={`input-${channelInfo.channel}-${field.key}-${idx}`}
-                        />
+        <CardContent className="space-y-4 pt-4">
+          {!showSettings ? (
+            <div className="flex flex-col items-start justify-between gap-4 py-2">
+              <div className="space-y-1">
+                <p className="text-sm text-muted-foreground">
+                  {config && Object.keys(configData).length > 0 
+                    ? "Configured" 
+                    : "Not configured"}
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowSettings(true)}
+                data-testid={`button-settings-${channelInfo.channel}`}
+              >
+                Settings
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-4 py-2">
+              {channelInfo.fields.map((field) => {
+                const isArrayField = field.type.startsWith("array-");
+                const baseType = isArrayField ? field.type.split("-")[1] : field.type;
+                const arrayValue = isArrayField ? (Array.isArray(configData[field.key]) ? configData[field.key] : []) : [];
+                
+                return (
+                  <div key={field.key} className="space-y-2">
+                    <Label htmlFor={`${channelInfo.channel}-${field.key}`}>{field.label}</Label>
+                    {isArrayField ? (
+                      <div className="space-y-2">
+                        {(arrayValue as string[]).map((item, idx) => (
+                          <div key={idx} className="flex gap-2">
+                            <Input
+                              type={baseType}
+                              placeholder={field.placeholder}
+                              value={item}
+                              onChange={(e) => {
+                                const newArray = [...(arrayValue as string[])];
+                                newArray[idx] = e.target.value;
+                                setConfigData({ ...configData, [field.key]: newArray });
+                              }}
+                              data-testid={`input-${channelInfo.channel}-${field.key}-${idx}`}
+                            />
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => {
+                                const newArray = (arrayValue as string[]).filter((_, i) => i !== idx);
+                                setConfigData({ ...configData, [field.key]: newArray });
+                              }}
+                              data-testid={`button-remove-${field.key}-${idx}`}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ))}
                         <Button
-                          size="icon"
-                          variant="ghost"
+                          variant="outline"
+                          size="sm"
                           onClick={() => {
-                            const newArray = (arrayValue as string[]).filter((_, i) => i !== idx);
-                            setConfigData({ ...configData, [field.key]: newArray });
+                            setConfigData({ ...configData, [field.key]: [...(arrayValue as string[]), ""] });
                           }}
-                          data-testid={`button-remove-${field.key}-${idx}`}
+                          data-testid={`button-add-${field.key}`}
                         >
-                          <X className="h-4 w-4" />
+                          Add {field.label}
                         </Button>
                       </div>
-                    ))}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setConfigData({ ...configData, [field.key]: [...(arrayValue as string[]), ""] });
-                      }}
-                      data-testid={`button-add-${field.key}`}
-                    >
-                      Add {field.label}
-                    </Button>
+                    ) : field.type === "textarea" ? (
+                      <Textarea
+                        id={`${channelInfo.channel}-${field.key}`}
+                        placeholder={field.placeholder}
+                        value={(configData[field.key] as string) || ""}
+                        onChange={(e) => setConfigData({ ...configData, [field.key]: e.target.value })}
+                        rows={3}
+                        data-testid={`input-${channelInfo.channel}-${field.key}`}
+                      />
+                    ) : (
+                      <Input
+                        id={`${channelInfo.channel}-${field.key}`}
+                        type={field.type}
+                        placeholder={field.placeholder}
+                        value={(configData[field.key] as string) || ""}
+                        onChange={(e) => setConfigData({ ...configData, [field.key]: e.target.value })}
+                        data-testid={`input-${channelInfo.channel}-${field.key}`}
+                      />
+                    )}
                   </div>
-                ) : field.type === "textarea" ? (
-                  <Textarea
-                    id={`${channelInfo.channel}-${field.key}`}
-                    placeholder={field.placeholder}
-                    value={(configData[field.key] as string) || ""}
-                    onChange={(e) => setConfigData({ ...configData, [field.key]: e.target.value })}
-                    rows={3}
-                    data-testid={`input-${channelInfo.channel}-${field.key}`}
-                  />
-                ) : (
-                  <Input
-                    id={`${channelInfo.channel}-${field.key}`}
-                    type={field.type}
-                    placeholder={field.placeholder}
-                    value={(configData[field.key] as string) || ""}
-                    onChange={(e) => setConfigData({ ...configData, [field.key]: e.target.value })}
-                    data-testid={`input-${channelInfo.channel}-${field.key}`}
-                  />
-                )}
-              </div>
-            );
-          })}
-          <div className="flex items-center justify-between pt-2">
+                );
+              })}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowSettings(false)}
+                data-testid={`button-close-settings-${channelInfo.channel}`}
+              >
+                Done
+              </Button>
+            </div>
+          )}
+
+          <div className="flex items-center justify-between pt-2 border-t">
             <Label htmlFor={`${channelInfo.channel}-enabled`}>Enable Notifications</Label>
             <Switch
               id={`${channelInfo.channel}-enabled`}
