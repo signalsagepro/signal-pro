@@ -288,7 +288,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return;
       }
       
-      const { strategy1Id, strategy2Id, logic } = req.body;
+      const { strategy1Id, strategy2Id, logic, timeWindow = 60 } = req.body;
       
       if (!strategy1Id || !strategy2Id || !logic) {
         res.status(400).json({ error: "strategy1Id, strategy2Id, and logic are required" });
@@ -300,7 +300,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return;
       }
 
-      const mergedStrategy = await storage.mergeStrategies(strategy1Id, strategy2Id, logic);
+      const mergedStrategy = await storage.mergeStrategies(strategy1Id, strategy2Id, logic, timeWindow);
       if (!mergedStrategy) {
         res.status(404).json({ error: "One or both strategies not found" });
         return;

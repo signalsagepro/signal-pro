@@ -140,6 +140,7 @@ export default function Strategies() {
   const [mergeMode, setMergeMode] = useState(false);
   const [selectedStrategies, setSelectedStrategies] = useState<string[]>([]);
   const [mergeLogic, setMergeLogic] = useState<"AND" | "OR">("AND");
+  const [mergeTimeWindow, setMergeTimeWindow] = useState(60);
   const { toast } = useToast();
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
@@ -184,12 +185,13 @@ export default function Strategies() {
   });
 
   const mergeMutation = useMutation({
-    mutationFn: ({ strategy1Id, strategy2Id, logic }: { strategy1Id: string; strategy2Id: string; logic: "AND" | "OR" }) =>
-      apiRequest("POST", "/api/strategies/merge", { strategy1Id, strategy2Id, logic }),
+    mutationFn: ({ strategy1Id, strategy2Id, logic, timeWindow }: { strategy1Id: string; strategy2Id: string; logic: "AND" | "OR"; timeWindow: number }) =>
+      apiRequest("POST", "/api/strategies/merge", { strategy1Id, strategy2Id, logic, timeWindow }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/strategies"] });
       setMergeMode(false);
       setSelectedStrategies([]);
+      setMergeTimeWindow(60);
       toast({
         title: "Strategies merged",
         description: "A new merged strategy has been created.",
@@ -245,6 +247,7 @@ export default function Strategies() {
         strategy1Id: selectedStrategies[0],
         strategy2Id: selectedStrategies[1],
         logic: mergeLogic,
+        timeWindow: mergeTimeWindow,
       });
     }
   };
@@ -313,25 +316,40 @@ export default function Strategies() {
               ))}
             </div>
             {selectedStrategies.length === 2 && (
-              <div className="flex items-center gap-4">
-                <Button
-                  size="sm"
-                  variant={mergeLogic === "AND" ? "default" : "outline"}
-                  onClick={() => setMergeLogic("AND")}
-                  className="flex-1"
-                  data-testid="button-logic-and"
-                >
-                  AND
-                </Button>
-                <Button
-                  size="sm"
-                  variant={mergeLogic === "OR" ? "default" : "outline"}
-                  onClick={() => setMergeLogic("OR")}
-                  className="flex-1"
-                  data-testid="button-logic-or"
-                >
-                  OR
-                </Button>
+              <div className="space-y-4">
+                <div className="flex items-center gap-4">
+                  <Button
+                    size="sm"
+                    variant={mergeLogic === "AND" ? "default" : "outline"}
+                    onClick={() => setMergeLogic("AND")}
+                    className="flex-1"
+                    data-testid="button-logic-and"
+                  >
+                    AND
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={mergeLogic === "OR" ? "default" : "outline"}
+                    onClick={() => setMergeLogic("OR")}
+                    className="flex-1"
+                    data-testid="button-logic-or"
+                  >
+                    OR
+                  </Button>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="merge-time-window">Time Window (seconds)</Label>
+                  <Input
+                    id="merge-time-window"
+                    type="number"
+                    min="1"
+                    value={mergeTimeWindow}
+                    onChange={(e) => setMergeTimeWindow(Math.max(1, parseInt(e.target.value) || 60))}
+                    placeholder="60"
+                    data-testid="input-merge-time-window"
+                  />
+                  <p className="text-xs text-muted-foreground">Only trigger if both strategies fire within this window</p>
+                </div>
               </div>
             )}
           </CardContent>

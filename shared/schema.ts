@@ -32,6 +32,9 @@ export const strategies = pgTable("strategies", {
   isCustom: boolean("is_custom").notNull().default(false),
   formula: text("formula"),
   signalCount: integer("signal_count").notNull().default(0),
+  mergeLogic: text("merge_logic"), // "AND" or "OR"
+  mergeTimeWindow: integer("merge_time_window"), // time window in seconds for merging
+  linkedStrategies: jsonb("linked_strategies"), // array of strategy IDs that are merged
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
@@ -41,6 +44,9 @@ export const insertStrategySchema = createInsertSchema(strategies).omit({
   createdAt: true,
   updatedAt: true,
   signalCount: true,
+  mergeLogic: true,
+  mergeTimeWindow: true,
+  linkedStrategies: true,
 });
 
 export type InsertStrategy = z.infer<typeof insertStrategySchema>;

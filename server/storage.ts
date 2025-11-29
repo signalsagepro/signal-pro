@@ -231,6 +231,9 @@ export class MemStorage implements IStorage {
       isCustom: insertStrategy.isCustom ?? false,
       formula: insertStrategy.formula ?? null,
       signalCount: 0,
+      mergeLogic: null,
+      mergeTimeWindow: null,
+      linkedStrategies: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -251,7 +254,7 @@ export class MemStorage implements IStorage {
     return this.strategies.delete(id);
   }
 
-  async mergeStrategies(strategy1Id: string, strategy2Id: string, logic: "AND" | "OR"): Promise<Strategy | undefined> {
+  async mergeStrategies(strategy1Id: string, strategy2Id: string, logic: "AND" | "OR", timeWindow?: number): Promise<Strategy | undefined> {
     const s1 = this.strategies.get(strategy1Id);
     const s2 = this.strategies.get(strategy2Id);
     
@@ -278,6 +281,9 @@ export class MemStorage implements IStorage {
       isCustom: true,
       formula: null,
       signalCount: 0,
+      mergeLogic: logic,
+      mergeTimeWindow: timeWindow ?? 60,
+      linkedStrategies: [strategy1Id, strategy2Id] as unknown,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
