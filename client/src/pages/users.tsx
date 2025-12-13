@@ -9,9 +9,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Trash2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Plus, Trash2, UserPlus, Users as UsersIcon, Shield, Loader2 } from "lucide-react";
 import type { User } from "@shared/schema";
 
 export default function Users() {
@@ -19,6 +21,8 @@ export default function Users() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<string | null>(null);
   const [formData, setFormData] = useState({ email: "", password: "", name: "", role: "user" });
 
   // Redirect non-admins
@@ -59,7 +63,12 @@ export default function Users() {
       apiRequest("DELETE", `/api/users/${userId}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users"] });
-      toast({ title: "User deleted successfully" });
+      setDeleteDialogOpen(false);
+      setUserToDelete(null);
+      toast({ 
+        title: "✅ User deleted successfully",
+        description: "The user has been removed from the system."
+      });
     },
     onError: (error: any) => {
       toast({
@@ -69,6 +78,17 @@ export default function Users() {
       });
     },
   });
+
+  const handleDeleteClick = (userId: string) => {
+    setUserToDelete(userId);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = () => {
+    if (userToDelete) {
+      deleteMutation.mutate(userToDelete);
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -88,22 +108,32 @@ export default function Users() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8 p-8 max-w-7xl mx-auto">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">User Management</h1>
-          <p className="text-muted-foreground">Create and manage platform users</p>
+        <div className="space-y-1">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-primary/10 rounded-lg">
+              <UsersIcon className="h-6 w-6 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">User Management</h1>
+              <p className="text-muted-foreground mt-1">Create and manage platform users with role-based access</p>
+            </div>
+          </div>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
+            <Button size="lg" className="shadow-lg hover:shadow-xl transition-shadow">
+              <UserPlus className="mr-2 h-5 w-5" />
               Create User
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="sm:max-w-[500px]">
             <DialogHeader>
-              <DialogTitle>Create New User</DialogTitle>
+              <DialogTitle className="text-2xl">Create New User</DialogTitle>
+              <DialogDescription>
+                Add a new user to the platform with specific role permissions.
+              </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
@@ -156,24 +186,52 @@ export default function Users() {
                 disabled={createMutation.isPending}
                 data-testid="button-create-user"
               >
-                {createMutation.isPending ? "Creating..." : "Create User"}
+                {createMutation.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  <>
+                    <UserPlus className="mr-2 h-4 w-4" />
+                    Create User
+                  </>
+                )}
               </Button>
             </form>
           </DialogContent>
         </Dialog>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>All Users</CardTitle>
-          <CardDescription>Total: {users.length} user{users.length !== 1 ? "s" : ""}</CardDescription>
+      <Card className="shadow-lg border-2">
+        <CardHeader className="bg-gradient-to-r from-muted/50 to-muted/30">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-2xl">All Users</CardTitle>
+              <CardDescription className="text-base mt-1">
+                {users.length} {users.length === 1 ? "user" : "users"} registered in the system
+              </CardDescription>
+            </div>
+            <Badge variant="secondary" className="text-lg px-4 py-2">
+              {users.length}
+            </Badge>
+          </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-6">
           {isLoading ? (
-            <div className="flex items-center justify-center h-20">Loading users...</div>
+            <div className="flex flex-col items-center justify-center h-40 space-y-4">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <p className="text-muted-foreground">Loading users...</p>
+            </div>
           ) : users.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              No users yet. Create your first user to get started.
+            <div className="text-center py-12 space-y-4">
+              <div className="p-4 bg-muted/50 rounded-full w-16 h-16 mx-auto flex items-center justify-center">
+                <UsersIcon className="h-8 w-8 text-muted-foreground" />
+              </div>
+              <div>
+                <p className="text-lg font-medium">No users yet</p>
+                <p className="text-muted-foreground">Create your first user to get started.</p>
+              </div>
             </div>
           ) : (
             <Table>
@@ -191,29 +249,31 @@ export default function Users() {
                     <TableCell className="font-medium">{u.name}</TableCell>
                     <TableCell>{u.email}</TableCell>
                     <TableCell>
-                      <span
-                        className={`inline-block px-2 py-1 rounded text-xs font-semibold ${
-                          u.role === "admin"
-                            ? "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100"
-                            : "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100"
-                        }`}
+                      <Badge
+                        variant={u.role === "admin" ? "destructive" : "default"}
+                        className="gap-1"
                         data-testid={`text-role-${u.id}`}
                       >
+                        {u.role === "admin" && <Shield className="h-3 w-3" />}
                         {u.role === "admin" ? "Admin" : "User"}
-                      </span>
+                      </Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      {u.id !== user.id && (
+                      {u.id !== user.id ? (
                         <Button
                           size="icon"
                           variant="ghost"
-                          className="text-destructive hover:text-destructive"
-                          onClick={() => deleteMutation.mutate(u.id)}
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10 transition-colors"
+                          onClick={() => handleDeleteClick(u.id)}
                           disabled={deleteMutation.isPending}
                           data-testid={`button-delete-${u.id}`}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
+                      ) : (
+                        <Badge variant="outline" className="text-xs">
+                          Current User
+                        </Badge>
                       )}
                     </TableCell>
                   </TableRow>
@@ -223,6 +283,46 @@ export default function Users() {
           )}
         </CardContent>
       </Card>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <div className="p-2 bg-destructive/10 rounded-lg">
+                <Trash2 className="h-5 w-5 text-destructive" />
+              </div>
+              Delete User?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-base">
+              This action cannot be undone. This will permanently delete the user account
+              and remove all associated data from the system.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteMutation.isPending}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              disabled={deleteMutation.isPending}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              {deleteMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete User
+                </>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
