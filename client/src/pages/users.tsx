@@ -53,6 +53,23 @@ export default function Users() {
     },
   });
 
+  // Delete user mutation
+  const deleteMutation = useMutation({
+    mutationFn: (userId: string) =>
+      apiRequest("DELETE", `/api/users/${userId}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users"] });
+      toast({ title: "User deleted successfully" });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to delete user",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.email || !formData.password || !formData.name) {
@@ -191,6 +208,8 @@ export default function Users() {
                           size="icon"
                           variant="ghost"
                           className="text-destructive hover:text-destructive"
+                          onClick={() => deleteMutation.mutate(u.id)}
+                          disabled={deleteMutation.isPending}
                           data-testid={`button-delete-${u.id}`}
                         >
                           <Trash2 className="h-4 w-4" />
