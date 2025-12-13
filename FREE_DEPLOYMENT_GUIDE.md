@@ -155,7 +155,7 @@ services:
     env: node
     region: oregon
     plan: free
-    buildCommand: npm install && npm run build
+    buildCommand: npm ci && npm run build
     startCommand: node dist/index.js
     healthCheckPath: /api/health
     envVars:
@@ -170,6 +170,8 @@ services:
       - key: SESSION_SECRET
         generateValue: true
 ```
+
+**Important**: `npm ci` installs ALL dependencies (including devDependencies like `vite` and `esbuild`) which are needed for the build.
 
 **2.2 Update `package.json`** (ensure these scripts exist):
 ```json
