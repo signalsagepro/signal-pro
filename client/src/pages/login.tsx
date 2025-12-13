@@ -62,13 +62,13 @@ export default function Login() {
           </div>
           <h1 className="text-4xl font-bold mb-3 bg-gradient-to-r from-emerald-400 via-teal-400 to-blue-400 bg-clip-text text-transparent">SignalSage</h1>
           <p className="text-slate-300 text-lg font-medium">Elite Trading Intelligence Platform</p>
-          <p className="text-slate-400 text-sm mt-2">Precision • Performance • Profit</p>
+          <p className="text-slate-400 text-sm mt-2">Precision • Performance </p>
         </div>
         
         <Card className="shadow-2xl border-2 border-emerald-500/20 bg-slate-900/80 backdrop-blur-xl">
           <CardHeader className="space-y-2">
-            <CardTitle className="text-2xl font-bold text-white">Welcome Back, Trader</CardTitle>
-            <CardDescription className="text-slate-300">Access your professional trading command center</CardDescription>
+            <CardTitle className="text-2xl font-bold text-white">Sign In</CardTitle>
+            <CardDescription className="text-slate-300">Sign in to manage and monitor your trading operations</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
