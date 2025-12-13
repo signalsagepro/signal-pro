@@ -13,9 +13,12 @@ import {
   type InsertCandleData,
   type User,
   type InsertUser,
+  type Log,
+  type InsertLog,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { hashPassword, verifyPassword } from "./auth";
+import { dbStorage, type IStorageWithLogs } from "./db-storage";
 
 export interface IStorage {
   getAssets(): Promise<Asset[]>;
@@ -29,6 +32,7 @@ export interface IStorage {
   createStrategy(strategy: InsertStrategy): Promise<Strategy>;
   updateStrategy(id: string, data: Partial<Strategy>): Promise<Strategy | undefined>;
   deleteStrategy(id: string): Promise<boolean>;
+  mergeStrategies?(strategy1Id: string, strategy2Id: string, logic: "AND" | "OR", timeWindow?: number): Promise<Strategy | undefined>;
 
   getSignals(): Promise<Signal[]>;
   getSignal(id: string): Promise<Signal | undefined>;
@@ -471,4 +475,10 @@ export class MemStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+// Use database storage if DATABASE_URL is set, otherwise fall back to memory storage
+const USE_DATABASE = !!process.env.DATABASE_URL;
+
+export const storage: IStorage = USE_DATABASE ? dbStorage : new MemStorage();
+
+// Export the database storage with logs support for when you need logging functionality
+export { dbStorage, type IStorageWithLogs };

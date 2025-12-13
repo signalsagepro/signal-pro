@@ -169,7 +169,30 @@ export const insertUserSchema = createInsertSchema(users).omit({
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 
+// Activity Logs table for tracking user actions and system events
+export const logs = pgTable("logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id, { onDelete: 'set null' }),
+  action: text("action").notNull(), // e.g., "login", "create_signal", "update_strategy"
+  entity: text("entity"), // e.g., "user", "signal", "strategy", "asset"
+  entityId: varchar("entity_id"), // ID of the affected entity
+  details: jsonb("details"), // Additional context/metadata
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  level: text("level").notNull().default("info"), // "info", "warn", "error"
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const insertLogSchema = createInsertSchema(logs).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertLog = z.infer<typeof insertLogSchema>;
+export type Log = typeof logs.$inferSelect;
+
 export type AssetType = "indian_stock" | "indian_futures" | "forex";
 export type Timeframe = "5m" | "15m";
 export type BrokerType = "indian" | "forex";
 export type NotificationChannel = "email" | "sms" | "webhook" | "discord" | "telegram";
+export type LogLevel = "info" | "warn" | "error";

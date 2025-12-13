@@ -68,13 +68,13 @@ export class MarketDataGenerator {
     if (history.length < 200) return;
 
     const closePrices = history.map(c => c.price);
-    const ema50Values = emaCalculator.calculateEMA(closePrices, 50);
-    const ema200Values = emaCalculator.calculateEMA(closePrices, 200);
+    const { ema50, ema200 } = emaCalculator.calculateEMA50And200(closePrices);
 
-    if (ema50Values.length === 0 || ema200Values.length === 0) return;
+    // Skip if we don't have valid EMA values
+    if (ema50 === null || ema200 === null) return;
 
-    const currentEma50 = ema50Values[ema50Values.length - 1];
-    const currentEma200 = ema200Values[ema200Values.length - 1];
+    const currentEma50 = ema50;
+    const currentEma200 = ema200;
 
     const marketData: MarketData = {
       assetId,

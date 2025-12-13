@@ -37,32 +37,25 @@ export function useAuth() {
 
   const login = async (data: { email: string; password: string }) => {
     try {
-      console.log("🔐 [AUTH] Starting login with email:", data.email);
-      const loginResult = await loginMutation.mutateAsync(data);
-      console.log("🔐 [AUTH] Login mutation completed:", loginResult);
+      await loginMutation.mutateAsync(data);
       
-      // Wait a tiny bit to ensure session is set on server
+      // Wait briefly to ensure session is set on server
       await new Promise(resolve => setTimeout(resolve, 100));
-      console.log("🔐 [AUTH] Waited 100ms, now fetching /api/auth/me");
       
-      // Manually fetch and set the user in cache
+      // Fetch and set the user in cache
       const response = await fetch("/api/auth/me", {
         cache: "no-store",
         headers: { "Cache-Control": "no-cache" }
       });
-      console.log("🔐 [AUTH] /api/auth/me response status:", response.status);
       
       if (response.ok) {
         const userData = await response.json();
-        console.log("🔐 [AUTH] Got user data:", userData);
         queryClient.setQueryData(["/api/auth/me"], userData);
-        console.log("🔐 [AUTH] Set query data in cache, returning true");
         return true;
       }
-      console.log("🔐 [AUTH] Response not OK, returning false");
       return false;
     } catch (error) {
-      console.error("🔐 [AUTH] Login error:", error);
+      console.error("Login failed:", error);
       return false;
     }
   };
@@ -70,13 +63,16 @@ export function useAuth() {
   const signup = async (data: { email: string; password: string; name: string }) => {
     try {
       await signupMutation.mutateAsync(data);
-      // Wait a tiny bit to ensure session is set on server
+      
+      // Wait briefly to ensure session is set on server
       await new Promise(resolve => setTimeout(resolve, 100));
-      // Manually fetch and set the user in cache
+      
+      // Fetch and set the user in cache
       const response = await fetch("/api/auth/me", {
         cache: "no-store",
         headers: { "Cache-Control": "no-cache" }
       });
+      
       if (response.ok) {
         const userData = await response.json();
         queryClient.setQueryData(["/api/auth/me"], userData);
@@ -84,7 +80,7 @@ export function useAuth() {
       }
       return false;
     } catch (error) {
-      console.error("Signup error:", error);
+      console.error("Signup failed:", error);
       return false;
     }
   };
@@ -92,11 +88,10 @@ export function useAuth() {
   const logout = async () => {
     try {
       await logoutMutation.mutateAsync();
-      // Manually clear the user from cache
       queryClient.setQueryData(["/api/auth/me"], null);
       return true;
     } catch (error) {
-      console.error("Logout error:", error);
+      console.error("Logout failed:", error);
       return false;
     }
   };

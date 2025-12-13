@@ -1,5 +1,6 @@
 import type { Strategy, Asset, InsertSignal } from "@shared/schema";
 import { storage } from "../storage";
+import { formulaEvaluator } from "./formula-evaluator";
 
 export interface MarketData {
   assetId: string;
@@ -90,7 +91,13 @@ export class Strategy15MBelow200Breakdown implements ISignalStrategy {
 }
 
 export class CustomFormulaStrategy implements ISignalStrategy {
-  constructor(private formula: string, private type: string) {}
+  constructor(private formula: string, private type: string) {
+    // Validate formula on construction
+    const validation = formulaEvaluator.validate(formula);
+    if (!validation.valid) {
+      throw new Error(`Invalid formula: ${validation.errors.join(', ')}`);
+    }
+  }
 
   getSignalType(): string {
     return this.type;
@@ -98,16 +105,15 @@ export class CustomFormulaStrategy implements ISignalStrategy {
 
   check(data: MarketData): boolean {
     try {
-      const fn = new Function(
-        "price",
-        "ema50",
-        "ema200",
-        "high",
-        "low",
-        "open",
-        `return ${this.formula}`
-      );
-      return !!fn(data.price, data.ema50, data.ema200, data.high, data.low, data.open);
+      // Use safe formula evaluator instead of new Function()
+      return formulaEvaluator.evaluate(this.formula, {
+        price: data.price,
+        ema50: data.ema50,
+        ema200: data.ema200,
+        high: data.high,
+        low: data.low,
+        open: data.open,
+      });
     } catch (error) {
       console.error("Error evaluating custom formula:", error);
       return false;

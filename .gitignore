@@ -4,3 +4,10 @@ dist
 server/public
 vite.config.ts.*
 *.tar.gz
+
+# Environment files
+.env
+.env.*
+
+# Windsurf/Cascade agent state files
+.agent_state_*

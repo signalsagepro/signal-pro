@@ -1,11 +1,43 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
-import { storage } from "./storage";
+import { storage, dbStorage } from "./storage";
 import { z } from "zod";
-import { insertAssetSchema, insertStrategySchema, insertSignalSchema, insertUserSchema } from "@shared/schema";
+import { insertAssetSchema, insertStrategySchema, insertSignalSchema, insertUserSchema, insertLogSchema } from "@shared/schema";
 import { marketDataGenerator } from "./services/market-data-generator";
-import { emailService } from "./services/email-service";
+import { notificationService } from "./services/notification-service";
+import { brokerService } from "./services/broker-service";
+import { brokerWebSocket } from "./services/broker-websocket";
+import { formulaEvaluator } from "./services/formula-evaluator";
+import { signalDetector } from "./services/signal-detector";
+import { requireAuth, requireAdmin, loginRateLimit, apiRateLimit, strictRateLimit } from "./middleware/auth";
+
+// Helper function to create activity logs
+async function createActivityLog(
+  action: string,
+  entity?: string,
+  entityId?: string,
+  userId?: string,
+  details?: Record<string, any>,
+  req?: Request
+) {
+  if (process.env.DATABASE_URL) {
+    try {
+      await dbStorage.createLog({
+        action,
+        entity,
+        entityId,
+        userId: userId || null,
+        details: details || null,
+        ipAddress: req?.ip || req?.socket?.remoteAddress || null,
+        userAgent: req?.headers?.["user-agent"] || null,
+        level: "info",
+      });
+    } catch (error) {
+      console.error("Failed to create activity log:", error);
+    }
+  }
+}
 
 const clients = new Set<WebSocket>();
 
@@ -18,7 +50,7 @@ function broadcastSignal(signal: any) {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  app.post("/api/auth/login", async (req: Request, res: Response) => {
+  app.post("/api/auth/login", loginRateLimit, async (req: Request, res: Response) => {
     try {
       const { email, password } = req.body;
       const user = await storage.verifyUserPassword(email, password);
@@ -30,6 +62,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         req.session.userId = user.id;
         req.session.userRole = user.role;
       }
+      await createActivityLog("login", "user", user.id, user.id, { email: user.email }, req);
       res.set("Cache-Control", "no-cache, no-store, must-revalidate");
       res.json({ user: { id: user.id, email: user.email, name: user.name, role: user.role } });
     } catch (error) {
@@ -37,7 +70,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/auth/signup", async (req: Request, res: Response) => {
+  app.post("/api/auth/signup", loginRateLimit, async (req: Request, res: Response) => {
     try {
       const data = insertUserSchema.parse(req.body);
       const existing = await storage.getUserByEmail(data.email);
@@ -50,6 +83,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         req.session.userId = user.id;
         req.session.userRole = user.role;
       }
+      await createActivityLog("signup", "user", user.id, user.id, { email: user.email }, req);
       res.status(201).json({ user: { id: user.id, email: user.email, name: user.name, role: user.role } });
     } catch (error: unknown) {
       if (error instanceof z.ZodError) {
@@ -300,12 +334,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return;
       }
 
+      if (!storage.mergeStrategies) {
+        res.status(501).json({ error: "Strategy merging not supported with current storage" });
+        return;
+      }
+
       const mergedStrategy = await storage.mergeStrategies(strategy1Id, strategy2Id, logic, timeWindow);
       if (!mergedStrategy) {
         res.status(404).json({ error: "One or both strategies not found" });
         return;
       }
 
+      await createActivityLog("merge_strategies", "strategy", mergedStrategy.id, req.session?.userId, { strategy1Id, strategy2Id, logic }, req);
       res.status(201).json(mergedStrategy);
     } catch (error) {
       res.status(500).json({ error: "Failed to merge strategies" });
@@ -320,11 +360,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return;
       }
 
-      try {
-        new Function("price", "ema50", "ema200", "high", "low", "open", `return ${formula}`);
-        res.json({ valid: true, message: "Formula is valid" });
-      } catch (error) {
-        res.status(400).json({ valid: false, message: "Invalid JavaScript expression" });
+      // Use safe formula evaluator instead of new Function()
+      const validation = formulaEvaluator.validate(formula);
+      
+      if (validation.valid) {
+        res.json({ 
+          valid: true, 
+          message: "Formula is valid",
+          warnings: validation.warnings,
+          allowedVariables: formulaEvaluator.getAllowedVariables(),
+          allowedFunctions: formulaEvaluator.getAllowedFunctions(),
+        });
+      } else {
+        res.status(400).json({ 
+          valid: false, 
+          message: "Invalid formula",
+          errors: validation.errors,
+        });
       }
     } catch (error) {
       res.status(500).json({ error: "Validation failed" });
@@ -346,39 +398,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const signal = await storage.createSignal(data);
       broadcastSignal(signal);
 
-      // Send email notifications if enabled
-      const notificationConfigs = await storage.getNotificationConfigs();
-      const emailConfig = notificationConfigs.find(c => c.channel === "email" && c.enabled);
+      // Send notifications to all enabled channels
+      const asset = await storage.getAsset(signal.assetId);
+      const strategy = await storage.getStrategy(signal.strategyId);
       
-      if (emailConfig && emailConfig.config) {
-        const configData = emailConfig.config as Record<string, any>;
-        const recipients = configData.recipients;
-        
-        if (recipients && (Array.isArray(recipients) ? recipients.length > 0 : recipients) && 
-            configData.smtpHost && configData.smtpPort && configData.smtpUser && configData.smtpPassword) {
-          const asset = await storage.getAsset(signal.assetId);
-          const strategy = await storage.getStrategy(signal.strategyId);
-          
-          if (asset && strategy) {
-            const emails = Array.isArray(recipients) ? recipients : [recipients];
-            emailService.sendSignalAlert(
-              emails,
-              asset.symbol,
-              strategy.name,
-              signal.type,
-              signal.price,
-              signal.ema50,
-              signal.ema200,
-              {
-                smtpHost: configData.smtpHost,
-                smtpPort: parseInt(configData.smtpPort),
-                smtpUser: configData.smtpUser,
-                smtpPassword: configData.smtpPassword,
-                fromEmail: configData.fromEmail || 'noreply@signalpro.com',
-              }
-            ).catch(err => console.error("Failed to send email notification:", err));
-          }
-        }
+      if (asset && strategy) {
+        const notificationConfigs = await storage.getNotificationConfigs();
+        notificationService.sendToAllEnabled(
+          { signal, asset, strategy },
+          notificationConfigs
+        ).catch((error: Error) => console.error("Failed to send notifications:", error));
       }
 
       res.status(201).json(signal);
@@ -437,17 +466,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return;
       }
 
-      if (!config.apiKey || !config.apiSecret) {
-        res.status(400).json({ error: "API credentials are required" });
+      if (!config.apiKey) {
+        res.status(400).json({ error: "API key is required" });
         return;
       }
 
+      // Use the new broker service for real connection testing
+      const result = await brokerService.connectBroker(config);
+
       await storage.updateBrokerConfig(id, {
-        connected: true,
-        lastConnected: new Date(),
+        connected: result.success,
+        lastConnected: result.success ? new Date() : config.lastConnected,
+        metadata: result.accessToken ? { 
+          ...(config.metadata as Record<string, unknown> || {}),
+          accessToken: result.accessToken,
+          userId: result.userId,
+        } : config.metadata,
       });
 
-      res.json({ success: true, message: "Connection successful" });
+      if (result.success) {
+        res.json({ success: true, message: result.message });
+      } else {
+        res.status(400).json({ success: false, error: result.message });
+      }
     } catch (error) {
       res.status(500).json({ error: "Connection test failed" });
     }
@@ -485,99 +526,233 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return;
       }
 
-      let testPassed = false;
-      const configData = config.config as Record<string, any>;
-
-      if (config.channel === "email" && configData?.recipients && configData?.smtpHost && configData?.smtpPort && configData?.smtpUser && configData?.smtpPassword) {
-        const emails = Array.isArray(configData.recipients)
-          ? configData.recipients
-          : [configData.recipients];
-        
-        testPassed = await emailService.sendTestEmail(emails[0], {
-          smtpHost: configData.smtpHost,
-          smtpPort: parseInt(configData.smtpPort),
-          smtpUser: configData.smtpUser,
-          smtpPassword: configData.smtpPassword,
-          fromEmail: configData.fromEmail || 'noreply@signalpro.com',
-        });
-      } else if (config.channel === "sms" && configData?.twilioAccountSid && configData?.twilioAuthToken && configData?.phoneNumbers) {
-        try {
-          const phoneNumbers = Array.isArray(configData.phoneNumbers) 
-            ? configData.phoneNumbers 
-            : [configData.phoneNumbers];
-          
-          if (phoneNumbers.length > 0) {
-            const accountSid = configData.twilioAccountSid;
-            const authToken = configData.twilioAuthToken;
-            const auth = Buffer.from(`${accountSid}:${authToken}`).toString("base64");
-            
-            const response = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`, {
-              method: "POST",
-              headers: {
-                "Authorization": `Basic ${auth}`,
-                "Content-Type": "application/x-www-form-urlencoded",
-              },
-              body: new URLSearchParams({
-                "To": phoneNumbers[0],
-                "From": process.env.TWILIO_PHONE_NUMBER || "",
-                "Body": "Test SMS from SignalPro - Configuration successful!",
-              }).toString(),
-            });
-            testPassed = response.ok;
-          }
-        } catch (error) {
-          testPassed = false;
-        }
-      } else if (config.channel === "webhook" && configData?.url) {
-        try {
-          const response = await fetch(configData.url, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ test: true, message: "SignalPro webhook test" }),
-          });
-          testPassed = response.ok;
-        } catch (error) {
-          testPassed = false;
-        }
-      } else if (config.channel === "discord" && configData?.webhookUrl) {
-        try {
-          const response = await fetch(configData.webhookUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ content: "🧪 SignalPro Discord webhook test - Configuration successful!" }),
-          });
-          testPassed = response.ok;
-        } catch (error) {
-          testPassed = false;
-        }
-      } else if (config.channel === "telegram" && configData?.botToken && configData?.chatId) {
-        try {
-          const response = await fetch(`https://api.telegram.org/bot${configData.botToken}/sendMessage`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              chat_id: configData.chatId,
-              text: "🧪 SignalPro Telegram test - Configuration successful!",
-            }),
-          });
-          testPassed = response.ok;
-        } catch (error) {
-          testPassed = false;
-        }
-      }
+      // Use the new notification service for testing
+      const result = await notificationService.testChannel(config);
 
       await storage.updateNotificationConfig(id, {
-        testStatus: testPassed ? "success" : "failed",
+        testStatus: result.success ? "success" : "failed",
         lastTested: new Date(),
       });
 
-      if (testPassed) {
-        res.json({ success: true, message: "Test notification sent successfully" });
+      if (result.success) {
+        res.json({ success: true, message: result.message });
       } else {
-        res.status(400).json({ success: false, error: "Test notification failed - check configuration" });
+        res.status(400).json({ success: false, error: result.message });
       }
     } catch (error) {
       res.status(500).json({ error: "Test notification failed" });
+    }
+  });
+
+  // ============ LOGS API ============
+  app.get("/api/logs", async (req: Request, res: Response) => {
+    try {
+      if (!req.session?.userId) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
+      const user = await storage.getUser(req.session.userId);
+      if (!user || user.role !== "admin") {
+        res.status(403).json({ error: "Forbidden - admin access required" });
+        return;
+      }
+
+      if (!process.env.DATABASE_URL) {
+        res.status(501).json({ error: "Logs require database storage" });
+        return;
+      }
+
+      const limit = parseInt(req.query.limit as string) || 100;
+      const logs = await dbStorage.getLogs(limit);
+      res.json(logs);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch logs" });
+    }
+  });
+
+  app.get("/api/logs/user/:userId", async (req: Request, res: Response) => {
+    try {
+      if (!req.session?.userId) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
+      const user = await storage.getUser(req.session.userId);
+      if (!user || user.role !== "admin") {
+        res.status(403).json({ error: "Forbidden - admin access required" });
+        return;
+      }
+
+      if (!process.env.DATABASE_URL) {
+        res.status(501).json({ error: "Logs require database storage" });
+        return;
+      }
+
+      const { userId } = req.params;
+      const logs = await dbStorage.getLogsByUser(userId);
+      res.json(logs);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch user logs" });
+    }
+  });
+
+  app.get("/api/logs/entity/:entity", async (req: Request, res: Response) => {
+    try {
+      if (!req.session?.userId) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
+      const user = await storage.getUser(req.session.userId);
+      if (!user || user.role !== "admin") {
+        res.status(403).json({ error: "Forbidden - admin access required" });
+        return;
+      }
+
+      if (!process.env.DATABASE_URL) {
+        res.status(501).json({ error: "Logs require database storage" });
+        return;
+      }
+
+      const { entity } = req.params;
+      const entityId = req.query.entityId as string | undefined;
+      const logs = await dbStorage.getLogsByEntity(entity, entityId);
+      res.json(logs);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch entity logs" });
+    }
+  });
+
+  // ============ BROKER REAL-TIME API ============
+  app.post("/api/broker-configs/:id/connect-realtime", async (req, res) => {
+    try {
+      if (!req.session?.userId) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
+
+      const { id } = req.params;
+      const config = await storage.getBrokerConfig(id);
+      if (!config) {
+        res.status(404).json({ error: "Broker config not found" });
+        return;
+      }
+
+      if (!config.apiKey) {
+        res.status(400).json({ error: "API key is required" });
+        return;
+      }
+
+      const metadata = config.metadata as Record<string, any> || {};
+      let connected = false;
+
+      switch (config.name.toLowerCase()) {
+        case "zerodha":
+          connected = await brokerWebSocket.connectZerodha({
+            apiKey: config.apiKey,
+            accessToken: metadata.accessToken || config.apiSecret || "",
+            broker: "zerodha",
+          });
+          break;
+        case "upstox":
+          connected = await brokerWebSocket.connectUpstox({
+            apiKey: config.apiKey,
+            accessToken: metadata.accessToken || config.apiSecret || "",
+            broker: "upstox",
+          });
+          break;
+        case "angel":
+          connected = await brokerWebSocket.connectAngel({
+            apiKey: config.apiKey,
+            accessToken: metadata.accessToken || config.apiSecret || "",
+            broker: "angel",
+          });
+          break;
+        default:
+          res.status(400).json({ error: `Real-time not supported for ${config.name}` });
+          return;
+      }
+
+      if (connected) {
+        await storage.updateBrokerConfig(id, { connected: true, lastConnected: new Date() });
+        res.json({ success: true, message: `Connected to ${config.name} real-time feed` });
+      } else {
+        res.status(400).json({ success: false, error: "Failed to connect to real-time feed" });
+      }
+    } catch (error) {
+      res.status(500).json({ error: "Real-time connection failed" });
+    }
+  });
+
+  app.get("/api/broker-realtime/status", async (req, res) => {
+    try {
+      const status = brokerWebSocket.getStatus();
+      res.json({ status });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to get status" });
+    }
+  });
+
+  app.post("/api/broker-realtime/subscribe", async (req, res) => {
+    try {
+      if (!req.session?.userId) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
+
+      const { broker, instrumentTokens } = req.body;
+      if (!broker || !instrumentTokens || !Array.isArray(instrumentTokens)) {
+        res.status(400).json({ error: "broker and instrumentTokens array required" });
+        return;
+      }
+
+      const success = brokerWebSocket.subscribe(broker, instrumentTokens);
+      if (success) {
+        res.json({ success: true, message: `Subscribed to ${instrumentTokens.length} instruments` });
+      } else {
+        res.status(400).json({ success: false, error: "Subscription failed - check connection" });
+      }
+    } catch (error) {
+      res.status(500).json({ error: "Subscription failed" });
+    }
+  });
+
+  // ============ EMA VALIDATION API ============
+  app.post("/api/ema/validate", async (req, res) => {
+    try {
+      const { data, period } = req.body;
+      if (!data || !Array.isArray(data) || !period) {
+        res.status(400).json({ error: "data array and period required" });
+        return;
+      }
+
+      const { emaCalculator } = await import("./services/ema-calculator");
+      const validation = emaCalculator.validateEMACalculation(data, period);
+      res.json(validation);
+    } catch (error) {
+      res.status(500).json({ error: "Validation failed" });
+    }
+  });
+
+  app.post("/api/ema/calculate", async (req, res) => {
+    try {
+      const { data, period } = req.body;
+      if (!data || !Array.isArray(data) || !period) {
+        res.status(400).json({ error: "data array and period required" });
+        return;
+      }
+
+      const { emaCalculator } = await import("./services/ema-calculator");
+      const emaValues = emaCalculator.calculateEMA(data, period);
+      const validValues = emaValues.filter(v => !isNaN(v));
+      
+      res.json({
+        period,
+        inputLength: data.length,
+        emaLength: validValues.length,
+        latestEMA: validValues.length > 0 ? validValues[validValues.length - 1] : null,
+        allValues: validValues,
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Calculation failed" });
     }
   });
 
@@ -591,7 +766,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     ws.on("message", (message) => {
       try {
         const data = JSON.parse(message.toString());
-        console.log("Received message:", data);
+        if (data.type === "subscribe" && data.broker && data.tokens) {
+          brokerWebSocket.subscribe(data.broker, data.tokens);
+        }
       } catch (error) {
         console.error("Invalid message format");
       }
@@ -602,6 +779,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
 
     ws.send(JSON.stringify({ type: "connected", message: "WebSocket connected" }));
+  });
+
+  // Setup broker WebSocket to broadcast ticks and generate signals
+  brokerWebSocket.on("tick", async (tickData) => {
+    // Broadcast raw tick to connected clients
+    clients.forEach((client) => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(JSON.stringify({ type: "tick", data: tickData }));
+      }
+    });
+
+    // Generate signals if we have EMA data
+    if (tickData.ema50 && tickData.ema200) {
+      try {
+        const signals = await signalDetector.detectSignals({
+          assetId: tickData.symbol,
+          timeframe: "5m",
+          price: tickData.lastPrice,
+          high: tickData.high,
+          low: tickData.low,
+          open: tickData.open,
+          ema50: tickData.ema50,
+          ema200: tickData.ema200,
+        });
+
+        for (const signal of signals) {
+          const createdSignal = await storage.createSignal(signal);
+          broadcastSignal(createdSignal);
+
+          // Send notifications
+          const asset = await storage.getAsset(signal.assetId);
+          const strategy = await storage.getStrategy(signal.strategyId);
+          if (asset && strategy) {
+            const configs = await storage.getNotificationConfigs();
+            notificationService.sendToAllEnabled({ signal: createdSignal, asset, strategy }, configs);
+          }
+        }
+      } catch (error) {
+        console.error("Signal detection error:", error);
+      }
+    }
   });
 
   marketDataGenerator.setBroadcastCallback(broadcastSignal);

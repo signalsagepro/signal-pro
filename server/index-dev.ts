@@ -8,7 +8,7 @@ import { createServer as createViteServer, createLogger } from "vite";
 
 import viteConfig from "../vite.config";
 import runApp from "./app";
-import { storage } from "./storage";
+import { storage, dbStorage } from "./storage";
 
 export async function setupVite(app: Express, server: Server) {
   const viteLogger = createLogger();
@@ -18,20 +18,36 @@ export async function setupVite(app: Express, server: Server) {
     allowedHosts: true as const,
   };
 
-  // Initialize default admin user for testing
-  async function initializeDefaultUser() {
-    const existing = await storage.getUserByEmail("admin@test.com");
-    if (!existing) {
-      await storage.createUser({
-        email: "admin@test.com",
-        password: "password123",
-        name: "Admin User",
-        role: "admin",
-      });
-      console.log("Default admin user created: admin@test.com / password123");
+  // Initialize database with default data if using database storage
+  async function initializeDatabase() {
+    if (process.env.DATABASE_URL) {
+      try {
+        await dbStorage.initializeDefaultData();
+      } catch (error) {
+        console.error("Failed to initialize database data:", error);
+      }
     }
   }
 
+  // Initialize default admin user for testing
+  async function initializeDefaultUser() {
+    try {
+      const existing = await storage.getUserByEmail("admin@test.com");
+      if (!existing) {
+        await storage.createUser({
+          email: "admin@test.com",
+          password: "password123",
+          name: "Admin User",
+          role: "admin",
+        });
+        console.log("Default admin user created: admin@test.com / password123");
+      }
+    } catch (error) {
+      console.error("Failed to create default user:", error);
+    }
+  }
+
+  await initializeDatabase();
   await initializeDefaultUser();
 
   const vite = await createViteServer({
@@ -74,6 +90,9 @@ export async function setupVite(app: Express, server: Server) {
     }
   });
 }
+
+// Set the port explicitly
+process.env.PORT = '5001';
 
 (async () => {
   await runApp(setupVite);
