@@ -625,6 +625,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ============ ADMIN CLEANUP API ============
+  app.get("/api/admin/cleanup-stats", async (req, res) => {
+    try {
+      if (!req.session?.userId) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
+      if (req.session.userRole !== "admin") {
+        res.status(403).json({ error: "Forbidden - admin access required" });
+        return;
+      }
+
+      if (!process.env.DATABASE_URL) {
+        res.status(501).json({ error: "Cleanup stats require database storage" });
+        return;
+      }
+
+      const { getCleanupStats } = await import("./jobs/database-cleanup");
+      const stats = await getCleanupStats();
+      
+      if (!stats) {
+        res.status(500).json({ error: "Failed to get cleanup stats" });
+        return;
+      }
+
+      res.json(stats);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to get cleanup stats" });
+    }
+  });
+
+  app.post("/api/admin/cleanup-now", async (req, res) => {
+    try {
+      if (!req.session?.userId) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
+      if (req.session.userRole !== "admin") {
+        res.status(403).json({ error: "Forbidden - admin access required" });
+        return;
+      }
+
+      if (!process.env.DATABASE_URL) {
+        res.status(501).json({ error: "Manual cleanup requires database storage" });
+        return;
+      }
+
+      const { cleanupOldData } = await import("./jobs/database-cleanup");
+      const result = await cleanupOldData();
+      
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ error: "Cleanup failed" });
+    }
+  });
+
   // ============ BROKER REAL-TIME API ============
   app.post("/api/broker-configs/:id/connect-realtime", async (req, res) => {
     try {
