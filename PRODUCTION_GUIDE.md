@@ -166,11 +166,28 @@ SESSION_SECRET="your-super-secret-session-key-here-32chars"
 NODE_ENV="production"
 PORT=5000
 
+# Disable simulated market data (RECOMMENDED for production)
+DISABLE_SIMULATED_DATA=true
+
 # Optional: Twilio for SMS
 TWILIO_ACCOUNT_SID="your-twilio-sid"
 TWILIO_AUTH_TOKEN="your-twilio-token"
 TWILIO_PHONE_NUMBER="+1234567890"
 ```
+
+### Important: Simulated vs Real Data
+
+**Development Mode** (default):
+- Simulated data generator runs 24/7
+- Generates fake price movements every 30 seconds
+- Useful for testing without waiting for market hours
+
+**Production Mode** (recommended):
+- Set `DISABLE_SIMULATED_DATA=true`
+- Only real broker WebSocket data is used
+- Signals only during market hours (9:15 AM - 3:30 PM IST)
+
+See `SIMULATED_VS_REAL_DATA.md` for details.
 
 ---
 

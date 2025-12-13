@@ -123,6 +123,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.json(null);
         return;
       }
+      // Ensure session has the latest role
+      if (req.session) {
+        req.session.userRole = user.role;
+      }
       res.json({ id: user.id, email: user.email, name: user.name, role: user.role });
     } catch (error) {
       res.status(500).json({ error: "Failed to get user" });

@@ -110,7 +110,13 @@ export default async function runApp(
   const port = parseInt(process.env.PORT || '5001', 10);
   server.listen(port, "0.0.0.0", () => {
     log(`serving on port ${port}`);
-    marketDataGenerator.start();
-    log("Market data generator started", "signalpro");
+    
+    // Only start simulated data generator if not disabled
+    if (process.env.DISABLE_SIMULATED_DATA !== 'true') {
+      marketDataGenerator.start();
+      log("Market data generator started (simulated)", "signalpro");
+    } else {
+      log("Simulated data generator disabled - using real broker data only", "signalpro");
+    }
   });
 }
