@@ -189,6 +189,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.delete("/api/users/:id", async (req: Request, res: Response) => {
+    try {
+      if (!req.session?.userId) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
+      const user = await storage.getUser(req.session.userId);
+      if (!user || user.role !== "admin") {
+        res.status(403).json({ error: "Forbidden" });
+        return;
+      }
+      const { id } = req.params;
+      
+      // Prevent admin from deleting themselves
+      if (id === req.session.userId) {
+        res.status(400).json({ error: "Cannot delete your own account" });
+        return;
+      }
+      
+      const deleted = await storage.deleteUser(id);
+      if (!deleted) {
+        res.status(404).json({ error: "User not found" });
+        return;
+      }
+      res.json({ success: true, message: "User deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting user:", error);
+      res.status(500).json({ error: "Failed to delete user" });
+    }
+  });
+
   app.get("/api/assets", async (req, res) => {
     try {
       const assets = await storage.getAssets();

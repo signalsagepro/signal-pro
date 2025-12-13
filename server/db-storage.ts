@@ -284,6 +284,11 @@ export class DatabaseStorage implements IStorageWithLogs {
     return isValid ? user : undefined;
   }
 
+  async deleteUser(id: string): Promise<boolean> {
+    const result = await db.delete(users).where(eq(users.id, id));
+    return (result.rowCount ?? 0) > 0;
+  }
+
   // ============ LOGS ============
   async getLogs(limit: number = 100): Promise<Log[]> {
     return db.select().from(logs).orderBy(desc(logs.createdAt)).limit(limit);

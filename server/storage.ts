@@ -59,6 +59,7 @@ export interface IStorage {
   getUsers(): Promise<User[]>;
   getUserByEmail(email: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  deleteUser(id: string): Promise<boolean>;
   verifyUserPassword(email: string, password: string): Promise<User | undefined>;
 }
 
@@ -472,6 +473,10 @@ export class MemStorage implements IStorage {
 
   async getUser(id: string): Promise<User | undefined> {
     return this.users.get(id);
+  }
+
+  async deleteUser(id: string): Promise<boolean> {
+    return this.users.delete(id);
   }
 }
 
