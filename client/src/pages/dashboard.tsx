@@ -3,10 +3,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { TrendingUp, Layers, Signal, Activity } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { TradingChart } from "@/components/trading-chart";
+import { useDashboardConfig } from "@/hooks/use-dashboard-config";
+import { useAuth } from "@/hooks/use-auth";
 import type { Signal as SignalType, Strategy, Asset } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
 
 export default function Dashboard() {
+  const { user } = useAuth();
+  const { config, isLoaded } = useDashboardConfig();
+  const isAdmin = user?.role === "admin";
+
   const { data: signals = [], isLoading: signalsLoading } = useQuery<SignalType[]>({
     queryKey: ["/api/signals"],
   });
@@ -18,6 +25,14 @@ export default function Dashboard() {
   const { data: assets = [], isLoading: assetsLoading } = useQuery<Asset[]>({
     queryKey: ["/api/assets"],
   });
+
+  // Check visibility based on config and user role
+  const showMetrics = config.showMetricCards && (!config.adminOnlyMetrics || isAdmin);
+  const showNifty = config.showNiftyChart && (!config.adminOnlyCharts || isAdmin);
+  const showSensex = config.showSensexChart && (!config.adminOnlyCharts || isAdmin);
+  const showSignals = config.showRecentSignals && (!config.adminOnlySignals || isAdmin);
+  const showStrategies = config.showActiveStrategies && (!config.adminOnlyStrategies || isAdmin);
+  const showAssets = config.showConnectedAssets && (!config.adminOnlyAssets || isAdmin);
 
   const todaySignals = signals.filter(
     (s) => new Date(s.createdAt).toDateString() === new Date().toDateString()
@@ -97,111 +112,143 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {metricCards.map((metric) => {
-          const isLoading = signalsLoading || strategiesLoading || assetsLoading;
-          
-          return (
-            <Card key={metric.title} data-testid={metric.testId} className="shadow-md border border-emerald-100 hover:shadow-lg hover:border-emerald-200 transition-all duration-300 bg-white">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-                <CardTitle className="text-sm font-semibold text-slate-500 uppercase tracking-wide">
-                  {metric.title}
-                </CardTitle>
-                <div className="p-2 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-500 shadow-md">
-                  <metric.icon className="h-5 w-5 text-white" />
-                </div>
-              </CardHeader>
-              <CardContent>
-                {isLoading ? (
-                  <Skeleton className="h-8 w-20" />
-                ) : (
-                  <div className="space-y-1">
-                    <div className="text-3xl font-mono font-bold text-slate-800">
-                      {typeof metric.value === "number" ? metric.value : metric.value}
-                      {metric.total && (
-                        <span className="text-lg text-muted-foreground font-normal">
-                          {" "}/ {metric.total}
-                        </span>
-                      )}
-                    </div>
+      {showMetrics && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {metricCards.map((metric) => {
+            const isLoading = signalsLoading || strategiesLoading || assetsLoading;
+            
+            return (
+              <Card key={metric.title} data-testid={metric.testId} className="shadow-md border border-emerald-100 hover:shadow-lg hover:border-emerald-200 transition-all duration-300 bg-white">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+                  <CardTitle className="text-sm font-semibold text-slate-500 uppercase tracking-wide">
+                    {metric.title}
+                  </CardTitle>
+                  <div className="p-2 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-500 shadow-md">
+                    <metric.icon className="h-5 w-5 text-white" />
                   </div>
-                )}
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-
-      <Card className="shadow-md border border-emerald-100">
-        <CardHeader className="bg-gradient-to-r from-emerald-50 to-teal-50 border-b border-emerald-100">
-          <div className="flex items-center gap-2">
-            <Signal className="h-5 w-5 text-emerald-600" />
-            <CardTitle className="text-xl font-bold text-slate-800">Recent Trading Signals</CardTitle>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {signalsLoading ? (
-            <div className="space-y-4">
-              {[...Array(5)].map((_, i) => (
-                <div key={i} className="flex items-center gap-4">
-                  <Skeleton className="h-12 w-12 rounded-md" />
-                  <div className="space-y-2 flex-1">
-                    <Skeleton className="h-4 w-1/3" />
-                    <Skeleton className="h-3 w-1/2" />
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : recentSignals.length === 0 ? (
-            <div className="text-center py-12">
-              <Signal className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-sm text-muted-foreground">No signals yet</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Signals will appear here when your strategies detect trading opportunities
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {recentSignals.map((signal) => {
-                const asset = assets.find((a) => a.id === signal.assetId);
-                const strategy = strategies.find((s) => s.id === signal.strategyId);
-
-                return (
-                  <div
-                    key={signal.id}
-                    className="flex items-start gap-4 p-4 rounded-lg border border-emerald-100 hover:border-emerald-200 hover:shadow-md transition-all duration-300 bg-white"
-                    data-testid={`signal-${signal.id}`}
-                  >
-                    <div className="flex-1 space-y-2">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-mono font-semibold">
-                          {asset?.symbol || "Unknown"}
-                        </span>
-                        <Badge variant={getSignalVariant(signal.type)} className="text-xs">
-                          {signal.timeframe.toUpperCase()}
-                        </Badge>
-                        <Badge variant="outline" className="text-xs">
-                          {getSignalTypeLabel(signal.type)}
-                        </Badge>
-                      </div>
-                      <div className="flex items-center gap-4 text-xs font-mono text-muted-foreground flex-wrap">
-                        <span>Price: {signal.price.toFixed(2)}</span>
-                        <span>EMA50: {signal.ema50.toFixed(2)}</span>
-                        <span>EMA200: {signal.ema200.toFixed(2)}</span>
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {strategy?.name} • {formatDistanceToNow(new Date(signal.createdAt), { addSuffix: true })}
+                </CardHeader>
+                <CardContent>
+                  {isLoading ? (
+                    <Skeleton className="h-8 w-20" />
+                  ) : (
+                    <div className="space-y-1">
+                      <div className="text-3xl font-mono font-bold text-slate-800">
+                        {typeof metric.value === "number" ? metric.value : metric.value}
+                        {metric.total && (
+                          <span className="text-lg text-muted-foreground font-normal">
+                            {" "}/ {metric.total}
+                          </span>
+                        )}
                       </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Real-time Index Charts - NIFTY & SENSEX */}
+      {(showNifty || showSensex) && (
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+          {showNifty && (
+            <TradingChart
+              symbol="NIFTY 50"
+              name="NSE Nifty 50 Index"
+              basePrice={24850}
+              color="#10b981"
+              isLive={true}
+              selectedTool="select"
+            />
           )}
-        </CardContent>
-      </Card>
+          {showSensex && (
+            <TradingChart
+              symbol="SENSEX"
+              name="BSE Sensex Index"
+              basePrice={82350}
+              color="#3b82f6"
+              isLive={true}
+              selectedTool="select"
+            />
+          )}
+        </div>
+      )}
 
+      {showSignals && (
+        <Card className="shadow-md border border-emerald-100">
+          <CardHeader className="bg-gradient-to-r from-emerald-50 to-teal-50 border-b border-emerald-100">
+            <div className="flex items-center gap-2">
+              <Signal className="h-5 w-5 text-emerald-600" />
+              <CardTitle className="text-xl font-bold text-slate-800">Recent Trading Signals</CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {signalsLoading ? (
+              <div className="space-y-4">
+                {[...Array(5)].map((_, i) => (
+                  <div key={i} className="flex items-center gap-4">
+                    <Skeleton className="h-12 w-12 rounded-md" />
+                    <div className="space-y-2 flex-1">
+                      <Skeleton className="h-4 w-1/3" />
+                      <Skeleton className="h-3 w-1/2" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : recentSignals.length === 0 ? (
+              <div className="text-center py-12">
+                <Signal className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <p className="text-sm text-muted-foreground">No signals yet</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Signals will appear here when your strategies detect trading opportunities
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {recentSignals.map((signal) => {
+                  const asset = assets.find((a) => a.id === signal.assetId);
+                  const strategy = strategies.find((s) => s.id === signal.strategyId);
+
+                  return (
+                    <div
+                      key={signal.id}
+                      className="flex items-start gap-4 p-4 rounded-lg border border-emerald-100 hover:border-emerald-200 hover:shadow-md transition-all duration-300 bg-white"
+                      data-testid={`signal-${signal.id}`}
+                    >
+                      <div className="flex-1 space-y-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-mono font-semibold">
+                            {asset?.symbol || "Unknown"}
+                          </span>
+                          <Badge variant={getSignalVariant(signal.type)} className="text-xs">
+                            {signal.timeframe.toUpperCase()}
+                          </Badge>
+                          <Badge variant="outline" className="text-xs">
+                            {getSignalTypeLabel(signal.type)}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-4 text-xs font-mono text-muted-foreground flex-wrap">
+                          <span>Price: {signal.price.toFixed(2)}</span>
+                          <span>EMA50: {signal.ema50.toFixed(2)}</span>
+                          <span>EMA200: {signal.ema200.toFixed(2)}</span>
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {strategy?.name} • {formatDistanceToNow(new Date(signal.createdAt), { addSuffix: true })}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {(showStrategies || showAssets) && (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {showStrategies && (
         <Card className="shadow-md border border-emerald-100">
           <CardHeader className="bg-gradient-to-r from-emerald-50 to-teal-50 border-b border-emerald-100">
             <div className="flex items-center gap-2">
@@ -244,7 +291,9 @@ export default function Dashboard() {
             )}
           </CardContent>
         </Card>
+        )}
 
+        {showAssets && (
         <Card className="shadow-md border border-emerald-100">
           <CardHeader className="bg-gradient-to-r from-emerald-50 to-teal-50 border-b border-emerald-100">
             <div className="flex items-center gap-2">
@@ -287,7 +336,9 @@ export default function Dashboard() {
             )}
           </CardContent>
         </Card>
+        )}
       </div>
+      )}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { LayoutDashboard, TrendingUp, Layers, Bell, Settings, Code2, Signal, LogOut, Users as UsersIcon } from "lucide-react";
+import { LayoutDashboard, TrendingUp, Layers, Bell, Settings, Code2, Signal, LogOut, Users as UsersIcon, LineChart } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import {
   Sidebar,
@@ -15,6 +15,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
+import { useDashboardConfig } from "@/hooks/use-dashboard-config";
 
 interface AppSidebarProps {
   devMode: boolean;
@@ -47,6 +48,12 @@ const mainNavItems = [
     icon: Signal,
     testId: "link-signals",
   },
+  {
+    title: "Charts",
+    url: "/charts",
+    icon: LineChart,
+    testId: "link-charts",
+  },
 ];
 
 const configNavItems = [
@@ -76,6 +83,28 @@ const adminNavItems = [
 export function AppSidebar({ devMode, superDevMode, onLogoClick }: AppSidebarProps) {
   const [location] = useLocation();
   const { user, logout } = useAuth();
+  const { config } = useDashboardConfig();
+  const isAdmin = user?.role === "admin";
+
+  // Filter nav items based on config and user role
+  const filteredNavItems = mainNavItems.filter((item) => {
+    if (item.url === "/") {
+      return config.showDashboardSection;
+    }
+    if (item.url === "/strategies") {
+      return config.showStrategiesSection && (!config.adminOnlyStrategiesSection || isAdmin);
+    }
+    if (item.url === "/assets") {
+      return config.showAssetsSection && (!config.adminOnlyAssetsSection || isAdmin);
+    }
+    if (item.url === "/signals") {
+      return config.showSignalsSection && (!config.adminOnlySignalsSection || isAdmin);
+    }
+    if (item.url === "/charts") {
+      return config.showChartsSection && (!config.adminOnlyChartsSection || isAdmin);
+    }
+    return true;
+  });
 
   return (
     <Sidebar className="border-r border-emerald-200 bg-white">
@@ -103,7 +132,7 @@ export function AppSidebar({ devMode, superDevMode, onLogoClick }: AppSidebarPro
           <SidebarGroupLabel>Main</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {mainNavItems.map((item) => (
+              {filteredNavItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
                     asChild
@@ -186,6 +215,18 @@ export function AppSidebar({ devMode, superDevMode, onLogoClick }: AppSidebarPro
                     <Link href="/dev/logs">
                       <Code2 className="h-4 w-4" />
                       <span>Logs</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={location === "/dev/dashboard-settings"}
+                    data-testid="link-dev-dashboard-settings"
+                  >
+                    <Link href="/dev/dashboard-settings">
+                      <Code2 className="h-4 w-4" />
+                      <span>Dashboard Settings</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

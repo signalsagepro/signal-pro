@@ -20,6 +20,8 @@ import ConfigNotifications from "@/pages/config-notifications";
 import Users from "@/pages/users";
 import DevLogs from "@/pages/dev-logs";
 import DevStrategyBuilder from "@/pages/dev-strategy-builder";
+import DevDashboardSettings from "@/pages/dev-dashboard-settings";
+import Charts from "@/pages/charts";
 
 function Router({ devMode, superDevMode, isAdmin }: { devMode: boolean; superDevMode: boolean; isAdmin: boolean }) {
   return (
@@ -28,10 +30,12 @@ function Router({ devMode, superDevMode, isAdmin }: { devMode: boolean; superDev
       <Route path="/strategies" component={Strategies} />
       <Route path="/assets" component={Assets} />
       <Route path="/signals" component={Signals} />
+      <Route path="/charts" component={Charts} />
       {isAdmin && <Route path="/config/brokers" component={ConfigBrokers} />}
       {isAdmin && <Route path="/config/notifications" component={ConfigNotifications} />}
       {isAdmin && <Route path="/users" component={Users} />}
       {devMode && isAdmin && <Route path="/dev/logs" component={DevLogs} />}
+      {devMode && isAdmin && <Route path="/dev/dashboard-settings" component={DevDashboardSettings} />}
       {superDevMode && isAdmin && <Route path="/dev/strategy-builder" component={DevStrategyBuilder} />}
       <Route component={NotFound} />
     </Switch>
