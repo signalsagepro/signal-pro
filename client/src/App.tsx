@@ -11,7 +11,6 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { useAuth } from "@/hooks/use-auth";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/login";
-import Signup from "@/pages/signup";
 import Dashboard from "@/pages/dashboard";
 import Strategies from "@/pages/strategies";
 import Assets from "@/pages/assets";
@@ -126,7 +125,6 @@ function App() {
         <TooltipProvider>
           <Switch>
             <Route path="/login" component={Login} />
-            <Route path="/signup" component={Signup} />
             <Route component={AuthGuard} />
           </Switch>
           <Toaster />

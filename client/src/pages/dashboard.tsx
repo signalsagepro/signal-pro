@@ -81,13 +81,20 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-8">
-      <div className="space-y-2">
-        <h1 className="text-3xl font-bold" data-testid="heading-dashboard">
-          Dashboard
-        </h1>
-        <p className="text-base text-muted-foreground">
-          Real-time overview of your trading signals and market activity
-        </p>
+      <div className="space-y-3">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-gradient-to-br from-emerald-500/10 to-teal-500/10 rounded-lg">
+            <Activity className="h-7 w-7 text-emerald-500" />
+          </div>
+          <div>
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent" data-testid="heading-dashboard">
+              Trading Command Center
+            </h1>
+            <p className="text-base text-muted-foreground mt-1">
+              Real-time market intelligence and signal monitoring
+            </p>
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -95,13 +102,13 @@ export default function Dashboard() {
           const isLoading = signalsLoading || strategiesLoading || assetsLoading;
           
           return (
-            <Card key={metric.title} data-testid={metric.testId} className="shadow-md border-primary/10 hover:shadow-lg transition-shadow">
+            <Card key={metric.title} data-testid={metric.testId} className="shadow-lg border-2 border-emerald-500/20 hover:shadow-emerald-500/20 hover:border-emerald-500/40 transition-all duration-300 bg-gradient-to-br from-background to-emerald-500/5">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-                <CardTitle className="text-sm font-semibold text-muted-foreground">
+                <CardTitle className="text-sm font-bold text-muted-foreground uppercase tracking-wide">
                   {metric.title}
                 </CardTitle>
-                <div className="p-2 rounded-lg bg-gradient-to-br from-primary/10 to-primary/5">
-                  <metric.icon className={`h-5 w-5 ${metric.color}`} />
+                <div className="p-2.5 rounded-xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20 shadow-lg">
+                  <metric.icon className="h-5 w-5 text-emerald-600" />
                 </div>
               </CardHeader>
               <CardContent>
@@ -109,10 +116,10 @@ export default function Dashboard() {
                   <Skeleton className="h-8 w-20" />
                 ) : (
                   <div className="space-y-1">
-                    <div className="text-2xl font-mono font-semibold">
+                    <div className="text-3xl font-mono font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
                       {typeof metric.value === "number" ? metric.value : metric.value}
                       {metric.total && (
-                        <span className="text-sm text-muted-foreground font-normal">
+                        <span className="text-lg text-muted-foreground font-normal">
                           {" "}/ {metric.total}
                         </span>
                       )}
@@ -125,9 +132,12 @@ export default function Dashboard() {
         })}
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Recent Signals</CardTitle>
+      <Card className="shadow-xl border-2 border-emerald-500/20">
+        <CardHeader className="bg-gradient-to-r from-emerald-500/10 to-teal-500/10 border-b border-emerald-500/20">
+          <div className="flex items-center gap-2">
+            <Signal className="h-5 w-5 text-emerald-600" />
+            <CardTitle className="text-xl font-bold">Recent Trading Signals</CardTitle>
+          </div>
         </CardHeader>
         <CardContent>
           {signalsLoading ? (
@@ -159,7 +169,7 @@ export default function Dashboard() {
                 return (
                   <div
                     key={signal.id}
-                    className="flex items-start gap-4 p-4 rounded-md border border-border hover-elevate"
+                    className="flex items-start gap-4 p-4 rounded-lg border-2 border-emerald-500/20 hover:border-emerald-500/40 hover:shadow-lg hover:shadow-emerald-500/10 transition-all duration-300 bg-gradient-to-r from-background to-emerald-500/5"
                     data-testid={`signal-${signal.id}`}
                   >
                     <div className="flex-1 space-y-2">
@@ -192,9 +202,12 @@ export default function Dashboard() {
       </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Active Strategies</CardTitle>
+        <Card className="shadow-lg border-2 border-teal-500/20">
+          <CardHeader className="bg-gradient-to-r from-teal-500/10 to-emerald-500/10 border-b border-teal-500/20">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="h-5 w-5 text-teal-600" />
+              <CardTitle className="text-lg font-bold">Active Strategies</CardTitle>
+            </div>
           </CardHeader>
           <CardContent>
             {strategiesLoading ? (
@@ -213,7 +226,7 @@ export default function Dashboard() {
                 {activeStrategies.slice(0, 5).map((strategy) => (
                   <div
                     key={strategy.id}
-                    className="flex items-center justify-between p-3 rounded-md border border-border"
+                    className="flex items-center justify-between p-3 rounded-lg border-2 border-teal-500/20 hover:border-teal-500/40 hover:shadow-md transition-all duration-200 bg-gradient-to-r from-background to-teal-500/5"
                     data-testid={`strategy-card-${strategy.id}`}
                   >
                     <div className="flex-1">
@@ -232,9 +245,12 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Connected Assets</CardTitle>
+        <Card className="shadow-lg border-2 border-blue-500/20">
+          <CardHeader className="bg-gradient-to-r from-blue-500/10 to-teal-500/10 border-b border-blue-500/20">
+            <div className="flex items-center gap-2">
+              <Layers className="h-5 w-5 text-blue-600" />
+              <CardTitle className="text-lg font-bold">Connected Assets</CardTitle>
+            </div>
           </CardHeader>
           <CardContent>
             {assetsLoading ? (
@@ -253,7 +269,7 @@ export default function Dashboard() {
                 {enabledAssets.slice(0, 5).map((asset) => (
                   <div
                     key={asset.id}
-                    className="flex items-center justify-between p-3 rounded-md border border-border"
+                    className="flex items-center justify-between p-3 rounded-lg border-2 border-blue-500/20 hover:border-blue-500/40 hover:shadow-md transition-all duration-200 bg-gradient-to-r from-background to-blue-500/5"
                     data-testid={`asset-card-${asset.id}`}
                   >
                     <div className="flex-1">

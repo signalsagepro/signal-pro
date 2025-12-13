@@ -71,27 +71,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.post("/api/auth/signup", loginRateLimit, async (req: Request, res: Response) => {
-    try {
-      const data = insertUserSchema.parse(req.body);
-      const existing = await storage.getUserByEmail(data.email);
-      if (existing) {
-        res.status(400).json({ error: "Email already exists" });
-        return;
-      }
-      const user = await storage.createUser(data);
-      if (req.session) {
-        req.session.userId = user.id;
-        req.session.userRole = user.role;
-      }
-      await createActivityLog("signup", "user", user.id, user.id, { email: user.email }, req);
-      res.status(201).json({ user: { id: user.id, email: user.email, name: user.name, role: user.role } });
-    } catch (error: unknown) {
-      if (error instanceof z.ZodError) {
-        res.status(400).json({ error: "Validation error", details: error.errors });
-      } else {
-        res.status(500).json({ error: "Signup failed" });
-      }
-    }
+    // Signup is disabled - only admins can create users via /api/users endpoint
+    res.status(403).json({ error: "Signup is disabled. Contact administrator for account creation." });
   });
 
   app.post("/api/auth/logout", async (req: Request, res: Response) => {
