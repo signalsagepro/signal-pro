@@ -108,22 +108,22 @@ export default function Users() {
   }
 
   return (
-    <div className="space-y-8 p-8 max-w-7xl mx-auto">
+    <div className="space-y-8">
       <div className="flex items-center justify-between">
         <div className="space-y-1">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-primary/10 rounded-lg">
-              <UsersIcon className="h-6 w-6 text-primary" />
+            <div className="p-2.5 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-xl shadow-lg">
+              <UsersIcon className="h-6 w-6 text-white" />
             </div>
             <div>
-              <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">User Management</h1>
-              <p className="text-muted-foreground mt-1">Create and manage platform users with role-based access</p>
+              <h1 className="text-4xl font-bold text-slate-800">User Management</h1>
+              <p className="text-slate-500 mt-1">Create and manage platform users with role-based access</p>
             </div>
           </div>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button size="lg" className="shadow-lg hover:shadow-xl transition-shadow">
+            <Button size="lg" className="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white shadow-lg hover:shadow-xl transition-all">
               <UserPlus className="mr-2 h-5 w-5" />
               Create User
             </Button>
@@ -203,12 +203,12 @@ export default function Users() {
         </Dialog>
       </div>
 
-      <Card className="shadow-lg border-2">
-        <CardHeader className="bg-gradient-to-r from-muted/50 to-muted/30">
+      <Card className="shadow-md border border-emerald-100">
+        <CardHeader className="bg-gradient-to-r from-emerald-50 to-teal-50 border-b border-emerald-100">
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="text-2xl">All Users</CardTitle>
-              <CardDescription className="text-base mt-1">
+              <CardTitle className="text-2xl text-slate-800">All Users</CardTitle>
+              <CardDescription className="text-base mt-1 text-slate-500">
                 {users.length} {users.length === 1 ? "user" : "users"} registered in the system
               </CardDescription>
             </div>
@@ -225,8 +225,8 @@ export default function Users() {
             </div>
           ) : users.length === 0 ? (
             <div className="text-center py-12 space-y-4">
-              <div className="p-4 bg-muted/50 rounded-full w-16 h-16 mx-auto flex items-center justify-center">
-                <UsersIcon className="h-8 w-8 text-muted-foreground" />
+              <div className="p-4 bg-emerald-50 rounded-full w-16 h-16 mx-auto flex items-center justify-center">
+                <UsersIcon className="h-8 w-8 text-emerald-500" />
               </div>
               <div>
                 <p className="text-lg font-medium">No users yet</p>
@@ -289,8 +289,8 @@ export default function Users() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
-              <div className="p-2 bg-destructive/10 rounded-lg">
-                <Trash2 className="h-5 w-5 text-destructive" />
+              <div className="p-2 bg-red-50 rounded-lg">
+                <Trash2 className="h-5 w-5 text-red-500" />
               </div>
               Delete User?
             </AlertDialogTitle>

@@ -78,19 +78,22 @@ export function AppSidebar({ devMode, superDevMode, onLogoClick }: AppSidebarPro
   const { user, logout } = useAuth();
 
   return (
-    <Sidebar>
-      <SidebarHeader className="p-4">
+    <Sidebar className="border-r border-emerald-200 bg-white">
+      <SidebarHeader className="p-4 border-b border-emerald-100">
         <button
           onClick={onLogoClick}
-          className="flex items-center gap-2 hover-elevate active-elevate-2 rounded-md p-2 -m-2"
+          className="flex items-center gap-3 hover:bg-emerald-50 rounded-lg p-3 -m-1 transition-all duration-300"
           data-testid="button-logo"
         >
-          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
-            <Signal className="h-5 w-5" />
+          <div className="relative">
+            <div className="absolute inset-0 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-lg blur-md opacity-30"></div>
+            <div className="relative flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-teal-500 text-white shadow-lg">
+              <Signal className="h-6 w-6" />
+            </div>
           </div>
           <div className="flex flex-col items-start">
-            <span className="text-sm font-semibold">SignalPro</span>
-            <span className="text-xs text-muted-foreground">v1.0.0</span>
+            <span className="text-base font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">SignalSage</span>
+            <span className="text-xs text-slate-500">Elite Trading Platform</span>
           </div>
         </button>
       </SidebarHeader>
@@ -206,15 +209,15 @@ export function AppSidebar({ devMode, superDevMode, onLogoClick }: AppSidebarPro
         )}
       </SidebarContent>
 
-      <SidebarFooter className="p-4 space-y-2">
-        <div className="text-xs text-muted-foreground px-2">
-          <p className="font-medium">{user?.name}</p>
-          <p>{user?.role === "admin" ? "Administrator" : "User"}</p>
+      <SidebarFooter className="p-4 space-y-3 border-t border-emerald-100">
+        <div className="px-3 py-2 rounded-lg bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200">
+          <p className="font-semibold text-sm text-slate-700">{user?.name}</p>
+          <p className="text-xs text-emerald-600">{user?.role === "admin" ? "Administrator" : "Trader"}</p>
         </div>
         <Button
           variant="ghost"
           size="sm"
-          className="w-full justify-start text-destructive hover:text-destructive"
+          className="w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-50"
           onClick={() => logout()}
           data-testid="button-logout"
         >
@@ -222,10 +225,10 @@ export function AppSidebar({ devMode, superDevMode, onLogoClick }: AppSidebarPro
           Logout
         </Button>
         {devMode && user?.role === "admin" && (
-          <div className="rounded-md bg-muted p-3 border border-border">
+          <div className="rounded-lg bg-emerald-50 p-3 border border-emerald-200">
             <div className="flex items-center gap-2 text-xs">
-              <Code2 className="h-3 w-3 text-muted-foreground" />
-              <span className="text-muted-foreground">Developer Mode Active</span>
+              <Code2 className="h-3 w-3 text-emerald-600" />
+              <span className="text-emerald-600 font-medium">Developer Mode Active</span>
             </div>
           </div>
         )}

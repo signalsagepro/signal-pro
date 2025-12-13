@@ -101,14 +101,14 @@ function ProtectedLayout() {
   return (
     <div className={devMode ? "hacker-mode" : ""}>
       <SidebarProvider style={style as React.CSSProperties}>
-        <div className="flex h-screen w-full">
+        <div className="flex h-screen w-full bg-gradient-to-br from-white via-slate-50 to-emerald-50/30">
           <AppSidebar devMode={devMode} superDevMode={superDevMode} onLogoClick={handleLogoClick} />
           <div className="flex flex-col flex-1">
-            <header className="flex items-center justify-between p-4 border-b gap-4">
+            <header className="flex items-center justify-between p-4 border-b border-emerald-200 bg-white/80 backdrop-blur-sm gap-4">
               <SidebarTrigger data-testid="button-sidebar-toggle" />
               <ThemeToggle />
             </header>
-            <main className="flex-1 overflow-auto p-6">
+            <main className="flex-1 overflow-auto p-6 bg-gradient-to-br from-white via-slate-50/50 to-emerald-50/20">
               <Router devMode={devMode} superDevMode={superDevMode} isAdmin={user?.role === "admin"} />
             </main>
           </div>
