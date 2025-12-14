@@ -686,7 +686,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.status(401).json({ error: "Unauthorized" });
         return;
       }
-      if (req.session.userRole !== "admin") {
+      // Fetch user from storage to verify admin role
+      const user = await storage.getUser(req.session.userId);
+      if (!user || user.role !== "admin") {
         res.status(403).json({ error: "Forbidden - admin access required" });
         return;
       }
@@ -715,7 +717,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.status(401).json({ error: "Unauthorized" });
         return;
       }
-      if (req.session.userRole !== "admin") {
+      // Fetch user from storage to verify admin role
+      const user = await storage.getUser(req.session.userId);
+      if (!user || user.role !== "admin") {
         res.status(403).json({ error: "Forbidden - admin access required" });
         return;
       }

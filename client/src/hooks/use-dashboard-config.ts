@@ -107,7 +107,10 @@ export function useDashboardConfig() {
   // Save config to server (admin only) - applies globally to all users
   const saveConfig = async (newConfig: Partial<DashboardConfig>): Promise<boolean> => {
     const updated = { ...config, ...newConfig };
+    // Update local state immediately for responsive UI
+    setConfig(updated);
     setIsSaving(true);
+    
     try {
       const response = await fetch("/api/dashboard-config", {
         method: "PUT",
@@ -124,13 +127,16 @@ export function useDashboardConfig() {
         setIsSaving(false);
         return true;
       } else {
+        // Revert on failure
         const error = await response.json();
         console.error("Failed to save config:", error);
+        loadConfig(); // Reload from server to revert
         setIsSaving(false);
         return false;
       }
     } catch (error) {
       console.error("Failed to save dashboard config:", error);
+      loadConfig(); // Reload from server to revert
       setIsSaving(false);
       return false;
     }

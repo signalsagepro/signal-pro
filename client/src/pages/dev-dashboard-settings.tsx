@@ -85,6 +85,18 @@ export default function DevDashboardSettings() {
   const { config, saveConfig, resetConfig, isSaving } = useDashboardConfig();
   const { toast } = useToast();
 
+  // Wrapper to handle save with feedback
+  const handleSave = async (newConfig: Partial<DashboardConfig>) => {
+    const success = await saveConfig(newConfig);
+    if (!success) {
+      toast({
+        title: "Save failed",
+        description: "You need admin privileges to change global settings.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleReset = async () => {
     const success = await resetConfig();
     if (success) {
@@ -138,11 +150,11 @@ export default function DevDashboardSettings() {
             description="Signal count, active strategies, connected assets, and system status"
             icon={BarChart3}
             value={config.showMetricCards}
-            onChange={(v) => saveConfig({ showMetricCards: v })}
+            onChange={(v) => handleSave({ showMetricCards: v })}
             adminOnly={{
               id: "adminOnlyMetrics",
               value: config.adminOnlyMetrics,
-              onChange: (v) => saveConfig({ adminOnlyMetrics: v }),
+              onChange: (v) => handleSave({ adminOnlyMetrics: v }),
             }}
           />
           
@@ -152,11 +164,11 @@ export default function DevDashboardSettings() {
             description="Live candlestick chart for NSE Nifty 50 Index"
             icon={LineChart}
             value={config.showNiftyChart}
-            onChange={(v) => saveConfig({ showNiftyChart: v })}
+            onChange={(v) => handleSave({ showNiftyChart: v })}
             adminOnly={{
               id: "adminOnlyCharts",
               value: config.adminOnlyCharts,
-              onChange: (v) => saveConfig({ adminOnlyCharts: v }),
+              onChange: (v) => handleSave({ adminOnlyCharts: v }),
             }}
           />
           
@@ -166,7 +178,7 @@ export default function DevDashboardSettings() {
             description="Live candlestick chart for BSE Sensex Index"
             icon={LineChart}
             value={config.showSensexChart}
-            onChange={(v) => saveConfig({ showSensexChart: v })}
+            onChange={(v) => handleSave({ showSensexChart: v })}
           />
           
           <ConfigItem
@@ -175,11 +187,11 @@ export default function DevDashboardSettings() {
             description="List of recent trading signals with details"
             icon={Signal}
             value={config.showRecentSignals}
-            onChange={(v) => saveConfig({ showRecentSignals: v })}
+            onChange={(v) => handleSave({ showRecentSignals: v })}
             adminOnly={{
               id: "adminOnlySignals",
               value: config.adminOnlySignals,
-              onChange: (v) => saveConfig({ adminOnlySignals: v }),
+              onChange: (v) => handleSave({ adminOnlySignals: v }),
             }}
           />
           
@@ -189,11 +201,11 @@ export default function DevDashboardSettings() {
             description="Overview of currently active trading strategies"
             icon={TrendingUp}
             value={config.showActiveStrategies}
-            onChange={(v) => saveConfig({ showActiveStrategies: v })}
+            onChange={(v) => handleSave({ showActiveStrategies: v })}
             adminOnly={{
               id: "adminOnlyStrategies",
               value: config.adminOnlyStrategies,
-              onChange: (v) => saveConfig({ adminOnlyStrategies: v }),
+              onChange: (v) => handleSave({ adminOnlyStrategies: v }),
             }}
           />
           
@@ -203,11 +215,11 @@ export default function DevDashboardSettings() {
             description="List of assets being monitored for signals"
             icon={Layers}
             value={config.showConnectedAssets}
-            onChange={(v) => saveConfig({ showConnectedAssets: v })}
+            onChange={(v) => handleSave({ showConnectedAssets: v })}
             adminOnly={{
               id: "adminOnlyAssets",
               value: config.adminOnlyAssets,
-              onChange: (v) => saveConfig({ adminOnlyAssets: v }),
+              onChange: (v) => handleSave({ adminOnlyAssets: v }),
             }}
           />
         </CardContent>
@@ -231,7 +243,7 @@ export default function DevDashboardSettings() {
             description="Main dashboard with overview and metrics"
             icon={LayoutDashboard}
             value={config.showDashboardSection}
-            onChange={(v) => saveConfig({ showDashboardSection: v })}
+            onChange={(v) => handleSave({ showDashboardSection: v })}
           />
           
           <ConfigItem
@@ -240,11 +252,11 @@ export default function DevDashboardSettings() {
             description="Trading strategies management page"
             icon={TrendingUp}
             value={config.showStrategiesSection}
-            onChange={(v) => saveConfig({ showStrategiesSection: v })}
+            onChange={(v) => handleSave({ showStrategiesSection: v })}
             adminOnly={{
               id: "adminOnlyStrategiesSection",
               value: config.adminOnlyStrategiesSection,
-              onChange: (v) => saveConfig({ adminOnlyStrategiesSection: v }),
+              onChange: (v) => handleSave({ adminOnlyStrategiesSection: v }),
             }}
           />
           
@@ -254,11 +266,11 @@ export default function DevDashboardSettings() {
             description="Asset management and monitoring"
             icon={Layers}
             value={config.showAssetsSection}
-            onChange={(v) => saveConfig({ showAssetsSection: v })}
+            onChange={(v) => handleSave({ showAssetsSection: v })}
             adminOnly={{
               id: "adminOnlyAssetsSection",
               value: config.adminOnlyAssetsSection,
-              onChange: (v) => saveConfig({ adminOnlyAssetsSection: v }),
+              onChange: (v) => handleSave({ adminOnlyAssetsSection: v }),
             }}
           />
           
@@ -268,11 +280,11 @@ export default function DevDashboardSettings() {
             description="Trading signals listing and management"
             icon={Signal}
             value={config.showSignalsSection}
-            onChange={(v) => saveConfig({ showSignalsSection: v })}
+            onChange={(v) => handleSave({ showSignalsSection: v })}
             adminOnly={{
               id: "adminOnlySignalsSection",
               value: config.adminOnlySignalsSection,
-              onChange: (v) => saveConfig({ adminOnlySignalsSection: v }),
+              onChange: (v) => handleSave({ adminOnlySignalsSection: v }),
             }}
           />
           
@@ -282,11 +294,11 @@ export default function DevDashboardSettings() {
             description="Live trading charts with drawing tools"
             icon={BarChart2}
             value={config.showChartsSection}
-            onChange={(v) => saveConfig({ showChartsSection: v })}
+            onChange={(v) => handleSave({ showChartsSection: v })}
             adminOnly={{
               id: "adminOnlyChartsSection",
               value: config.adminOnlyChartsSection,
-              onChange: (v) => saveConfig({ adminOnlyChartsSection: v }),
+              onChange: (v) => handleSave({ adminOnlyChartsSection: v }),
             }}
           />
         </CardContent>
