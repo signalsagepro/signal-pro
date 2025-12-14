@@ -637,6 +637,127 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ============ DASHBOARD CONFIG API ============
+  // Global dashboard configuration that applies to all users
+  let globalDashboardConfig: Record<string, any> = {
+    // Dashboard component visibility
+    showMetricCards: true,
+    showNiftyChart: true,
+    showSensexChart: true,
+    showRecentSignals: true,
+    showActiveStrategies: true,
+    showConnectedAssets: true,
+    // Role-based visibility for dashboard
+    adminOnlyMetrics: false,
+    adminOnlyCharts: false,
+    adminOnlySignals: false,
+    adminOnlyStrategies: false,
+    adminOnlyAssets: false,
+    // Sidebar section visibility
+    showDashboardSection: true,
+    showStrategiesSection: true,
+    showAssetsSection: true,
+    showSignalsSection: true,
+    showChartsSection: true,
+    // Admin-only sidebar sections
+    adminOnlyStrategiesSection: false,
+    adminOnlyAssetsSection: false,
+    adminOnlySignalsSection: false,
+    adminOnlyChartsSection: false,
+  };
+
+  // Get global dashboard config (accessible to all authenticated users)
+  app.get("/api/dashboard-config", async (req: Request, res: Response) => {
+    try {
+      if (!req.session?.userId) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
+      res.json(globalDashboardConfig);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch dashboard config" });
+    }
+  });
+
+  // Update global dashboard config (admin only)
+  app.put("/api/dashboard-config", async (req: Request, res: Response) => {
+    try {
+      if (!req.session?.userId) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
+      if (req.session.userRole !== "admin") {
+        res.status(403).json({ error: "Forbidden - admin access required" });
+        return;
+      }
+
+      globalDashboardConfig = { ...globalDashboardConfig, ...req.body };
+      
+      await createActivityLog(
+        "update_dashboard_config",
+        "dashboard_config",
+        undefined,
+        req.session.userId,
+        { config: globalDashboardConfig },
+        req
+      );
+
+      res.json(globalDashboardConfig);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update dashboard config" });
+    }
+  });
+
+  // Reset dashboard config to defaults (admin only)
+  app.post("/api/dashboard-config/reset", async (req: Request, res: Response) => {
+    try {
+      if (!req.session?.userId) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
+      if (req.session.userRole !== "admin") {
+        res.status(403).json({ error: "Forbidden - admin access required" });
+        return;
+      }
+
+      globalDashboardConfig = {
+        showMetricCards: true,
+        showNiftyChart: true,
+        showSensexChart: true,
+        showRecentSignals: true,
+        showActiveStrategies: true,
+        showConnectedAssets: true,
+        adminOnlyMetrics: false,
+        adminOnlyCharts: false,
+        adminOnlySignals: false,
+        adminOnlyStrategies: false,
+        adminOnlyAssets: false,
+        showDashboardSection: true,
+        showStrategiesSection: true,
+        showAssetsSection: true,
+        showSignalsSection: true,
+        showChartsSection: true,
+        adminOnlyStrategiesSection: false,
+        adminOnlyAssetsSection: false,
+        adminOnlySignalsSection: false,
+        adminOnlyChartsSection: false,
+      };
+
+      await createActivityLog(
+        "reset_dashboard_config",
+        "dashboard_config",
+        undefined,
+        req.session.userId,
+        { config: globalDashboardConfig },
+        req
+      );
+
+      res.json(globalDashboardConfig);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to reset dashboard config" });
+    }
+  });
+
   // ============ ADMIN CLEANUP API ============
   app.get("/api/admin/cleanup-stats", async (req, res) => {
     try {

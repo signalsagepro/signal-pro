@@ -82,22 +82,23 @@ function ConfigItem({ id, label, description, icon: Icon, value, onChange, admin
 }
 
 export default function DevDashboardSettings() {
-  const { config, saveConfig, resetConfig } = useDashboardConfig();
+  const { config, saveConfig, resetConfig, isSaving } = useDashboardConfig();
   const { toast } = useToast();
 
-  const handleSave = () => {
-    toast({
-      title: "Settings saved",
-      description: "Dashboard configuration has been updated.",
-    });
-  };
-
-  const handleReset = () => {
-    resetConfig();
-    toast({
-      title: "Settings reset",
-      description: "Dashboard configuration has been reset to defaults.",
-    });
+  const handleReset = async () => {
+    const success = await resetConfig();
+    if (success) {
+      toast({
+        title: "Settings reset",
+        description: "Dashboard configuration has been reset to defaults for all users.",
+      });
+    } else {
+      toast({
+        title: "Reset failed",
+        description: "You need admin privileges to reset global settings.",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
@@ -299,10 +300,10 @@ export default function DevDashboardSettings() {
               <Eye className="h-5 w-5" />
             </div>
             <div>
-              <h3 className="font-semibold text-blue-800">Preview Changes</h3>
+              <h3 className="font-semibold text-blue-800">Global Settings</h3>
               <p className="text-sm text-blue-600 mt-1">
-                Changes are applied immediately. Visit the Dashboard to see the updated layout.
-                Components marked as "Admin only" will be hidden from non-admin users.
+                <strong>Changes apply to ALL users immediately.</strong> When you toggle a section off, 
+                it will be hidden for everyone. Components marked as "Admin only" will only be visible to admins.
               </p>
             </div>
           </div>
@@ -314,19 +315,22 @@ export default function DevDashboardSettings() {
         <Button
           variant="outline"
           onClick={handleReset}
+          disabled={isSaving}
           className="text-slate-600 hover:text-slate-800"
         >
           <RotateCcw className="h-4 w-4 mr-2" />
           Reset to Defaults
         </Button>
         
-        <Button
-          onClick={handleSave}
-          className="bg-emerald-500 hover:bg-emerald-600"
-        >
-          <Save className="h-4 w-4 mr-2" />
-          Save Configuration
-        </Button>
+        <div className="flex items-center gap-3">
+          {isSaving && (
+            <span className="text-sm text-slate-500">Saving...</span>
+          )}
+          <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200">
+            <Save className="h-3 w-3 mr-1" />
+            Changes apply globally to all users
+          </Badge>
+        </div>
       </div>
     </div>
   );

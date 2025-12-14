@@ -63,68 +63,103 @@ const DEFAULT_CONFIG: DashboardConfig = {
   adminOnlyChartsSection: false,
 };
 
-const STORAGE_KEY = "signalsage_dashboard_config";
-
 export function useDashboardConfig() {
   const [config, setConfig] = useState<DashboardConfig>(DEFAULT_CONFIG);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
-  // Load config from localStorage
-  const loadConfig = useCallback(() => {
+  // Load config from server (global config applies to all users)
+  const loadConfig = useCallback(async () => {
     try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        setConfig({ ...DEFAULT_CONFIG, ...parsed });
+      const response = await fetch("/api/dashboard-config", {
+        credentials: "include",
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setConfig({ ...DEFAULT_CONFIG, ...data });
       } else {
+        // Fallback to defaults if not authenticated or error
         setConfig(DEFAULT_CONFIG);
       }
     } catch (error) {
       console.error("Failed to load dashboard config:", error);
+      setConfig(DEFAULT_CONFIG);
     }
+    setIsLoaded(true);
   }, []);
 
   // Load on mount and listen for changes
   useEffect(() => {
     loadConfig();
-    setIsLoaded(true);
 
-    // Listen for config changes from other components
+    // Listen for config changes from other components (e.g., after admin saves)
     const handleConfigChange = () => {
       loadConfig();
     };
 
     window.addEventListener(CONFIG_CHANGE_EVENT, handleConfigChange);
-    window.addEventListener("storage", handleConfigChange);
 
     return () => {
       window.removeEventListener(CONFIG_CHANGE_EVENT, handleConfigChange);
-      window.removeEventListener("storage", handleConfigChange);
     };
   }, [loadConfig]);
 
-  // Save config to localStorage and broadcast change
-  const saveConfig = (newConfig: Partial<DashboardConfig>) => {
+  // Save config to server (admin only) - applies globally to all users
+  const saveConfig = async (newConfig: Partial<DashboardConfig>): Promise<boolean> => {
     const updated = { ...config, ...newConfig };
-    setConfig(updated);
+    setIsSaving(true);
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-      // Dispatch custom event to notify other components
-      window.dispatchEvent(new CustomEvent(CONFIG_CHANGE_EVENT));
+      const response = await fetch("/api/dashboard-config", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(updated),
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setConfig(data);
+        // Notify other components to reload
+        window.dispatchEvent(new CustomEvent(CONFIG_CHANGE_EVENT));
+        setIsSaving(false);
+        return true;
+      } else {
+        const error = await response.json();
+        console.error("Failed to save config:", error);
+        setIsSaving(false);
+        return false;
+      }
     } catch (error) {
       console.error("Failed to save dashboard config:", error);
+      setIsSaving(false);
+      return false;
     }
   };
 
-  // Reset to defaults and broadcast change
-  const resetConfig = () => {
-    setConfig(DEFAULT_CONFIG);
+  // Reset to defaults (admin only) - applies globally
+  const resetConfig = async (): Promise<boolean> => {
+    setIsSaving(true);
     try {
-      localStorage.removeItem(STORAGE_KEY);
-      // Dispatch custom event to notify other components
-      window.dispatchEvent(new CustomEvent(CONFIG_CHANGE_EVENT));
+      const response = await fetch("/api/dashboard-config/reset", {
+        method: "POST",
+        credentials: "include",
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setConfig(data);
+        // Notify other components to reload
+        window.dispatchEvent(new CustomEvent(CONFIG_CHANGE_EVENT));
+        setIsSaving(false);
+        return true;
+      } else {
+        setIsSaving(false);
+        return false;
+      }
     } catch (error) {
       console.error("Failed to reset dashboard config:", error);
+      setIsSaving(false);
+      return false;
     }
   };
 
@@ -145,9 +180,11 @@ export function useDashboardConfig() {
   return {
     config,
     isLoaded,
+    isSaving,
     saveConfig,
     resetConfig,
     isVisible,
+    reloadConfig: loadConfig,
   };
 }
 
