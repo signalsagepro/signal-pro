@@ -56,7 +56,8 @@ function ConfigBrokersContent() {
   const [testingConnection, setTestingConnection] = useState<string | null>(null);
   const [verifyingConnection, setVerifyingConnection] = useState<string | null>(null);
   const [cardStates, setCardStates] = useState<BrokerCardState>({});
-  const [liveDataEnabled, setLiveDataEnabled] = useState(false);
+  const [realtimeActive, setRealtimeActive] = useState(false);
+  const [startingRealtime, setStartingRealtime] = useState(false);
   const { toast } = useToast();
 
   const { data: brokerConfigs = [], isLoading } = useQuery<BrokerConfig[]>({
@@ -65,6 +66,18 @@ function ConfigBrokersContent() {
 
   // Check if Zerodha is connected
   const zerodhaConnected = brokerConfigs.some(c => c.name === "zerodha" && c.connected);
+
+  // Check real-time status on mount
+  useEffect(() => {
+    if (zerodhaConnected) {
+      fetch("/api/realtime/status", { credentials: "include" })
+        .then(res => res.json())
+        .then(data => {
+          setRealtimeActive(data.websocketStatus?.zerodha === "connected");
+        })
+        .catch(console.error);
+    }
+  }, [zerodhaConnected]);
 
   // Listen for OAuth popup messages
   useEffect(() => {
@@ -384,25 +397,26 @@ function ConfigBrokersContent() {
     );
   }
 
-  const handleToggleLiveData = async () => {
+  const handleToggleRealtime = async () => {
+    setStartingRealtime(true);
     try {
-      const response = await fetch("/api/market-data/toggle-live", {
+      const endpoint = realtimeActive ? "/api/realtime/stop" : "/api/realtime/start";
+      const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ enabled: !liveDataEnabled }),
       });
 
       const data = await response.json();
       if (response.ok) {
-        setLiveDataEnabled(!liveDataEnabled);
+        setRealtimeActive(!realtimeActive);
         toast({
-          title: data.mode === "live" ? "Live Data Enabled" : "Simulated Data Enabled",
+          title: realtimeActive ? "Real-time Stopped" : "Real-time Started",
           description: data.message,
         });
       } else {
         toast({
-          title: "Failed to toggle data mode",
+          title: "Failed to toggle real-time mode",
           description: data.error || "An error occurred",
           variant: "destructive",
         });
@@ -410,9 +424,11 @@ function ConfigBrokersContent() {
     } catch (error) {
       toast({
         title: "Error",
-        description: "Failed to toggle live data mode",
+        description: "Failed to toggle real-time mode",
         variant: "destructive",
       });
+    } finally {
+      setStartingRealtime(false);
     }
   };
 
@@ -428,16 +444,17 @@ function ConfigBrokersContent() {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
               <div className="space-y-1">
-                <h3 className="font-semibold text-emerald-900">Live Market Data</h3>
+                <h3 className="font-semibold text-emerald-900">Real-time WebSocket Signals</h3>
                 <p className="text-sm text-emerald-700">
-                  {liveDataEnabled 
-                    ? "Using real-time prices from Zerodha for signal generation" 
-                    : "Using simulated data for signal generation"}
+                  {realtimeActive 
+                    ? "🟢 Connected to Zerodha WebSocket - receiving live tick data" 
+                    : "⚪ Disconnected - click to start real-time signal generation"}
                 </p>
               </div>
               <Switch
-                checked={liveDataEnabled}
-                onCheckedChange={handleToggleLiveData}
+                checked={realtimeActive}
+                onCheckedChange={handleToggleRealtime}
+                disabled={startingRealtime}
                 className="data-[state=checked]:bg-emerald-600"
               />
             </div>

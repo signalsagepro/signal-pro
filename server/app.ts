@@ -9,7 +9,6 @@ import express, {
 import session from "express-session";
 
 import { registerRoutes } from "./routes";
-import { marketDataGenerator } from "./services/market-data-generator";
 import { startCleanupJob } from "./jobs/database-cleanup";
 
 export function log(message: string, source = "express") {
@@ -111,14 +110,7 @@ export default async function runApp(
   const port = parseInt(process.env.PORT || '5001', 10);
   server.listen(port, "0.0.0.0", () => {
     log(`serving on port ${port}`);
-    
-    // Only start simulated data generator if not disabled
-    if (process.env.DISABLE_SIMULATED_DATA !== 'true') {
-      marketDataGenerator.start();
-      log("Market data generator started (simulated)", "signalpro");
-    } else {
-      log("Simulated data generator disabled - using real broker data only", "signalpro");
-    }
+    log("Real-time signal generation via Zerodha WebSocket - use /api/realtime/start to begin", "signalpro");
 
     // Start database cleanup job (only if using database)
     if (process.env.DATABASE_URL) {
