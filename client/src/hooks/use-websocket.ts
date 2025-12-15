@@ -80,16 +80,21 @@ export function useWebSocket() {
     }
   };
 
-  const handleNewSignal = (signal: Signal) => {
+  const handleNewSignal = (signal: any) => {
     console.log('[WebSocket] New signal received:', signal);
     
-    // Invalidate signals query to refresh the list
+    // Invalidate and refetch signals query to refresh the list immediately
     queryClient.invalidateQueries({ queryKey: ['/api/signals'] });
+    queryClient.refetchQueries({ queryKey: ['/api/signals'] });
     
-    // Show flash message notification
+    // Get asset name for better flash message
+    const assetName = signal.asset?.symbol || signal.asset?.name || 'Unknown Asset';
+    const signalTypeLabel = signal.type.replace(/_/g, ' ').toUpperCase();
+    
+    // Show flash message notification with asset name
     toast({
       title: '🚨 New Trading Signal!',
-      description: `${signal.type.replace(/_/g, ' ').toUpperCase()} signal generated at ₹${signal.price.toFixed(2)}`,
+      description: `${assetName}: ${signalTypeLabel} at ₹${signal.price.toFixed(2)}`,
       duration: 8000, // Show for 8 seconds
     });
 

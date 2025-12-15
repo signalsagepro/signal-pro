@@ -1245,11 +1245,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         for (const signal of signals) {
           const createdSignal = await storage.createSignal(signal);
-          broadcastSignal(createdSignal);
-
-          // Send notifications
+          
+          // Get asset and strategy info for broadcasting
           const asset = await storage.getAsset(signal.assetId);
           const strategy = await storage.getStrategy(signal.strategyId);
+          
+          // Broadcast signal with asset info for better flash messages
+          broadcastSignal({
+            ...createdSignal,
+            asset: asset ? { symbol: asset.symbol, name: asset.name } : null,
+            strategy: strategy ? { name: strategy.name } : null
+          });
+
+          // Send notifications
           if (asset && strategy) {
             const configs = await storage.getNotificationConfigs();
             notificationService.sendToAllEnabled({ signal: createdSignal, asset, strategy }, configs);
