@@ -927,12 +927,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return;
       }
 
-      const user = await storage.getUser(req.session.userId);
-      if (!user || user.role !== "admin") {
-        res.status(403).json({ error: "Admin access required" });
-        return;
-      }
-
+      // Allow all authenticated users to update dashboard config
       const currentConfig = await storage.getDashboardConfig("global");
       const updatedConfig = { ...(currentConfig?.config || DEFAULT_DASHBOARD_CONFIG), ...req.body };
       
@@ -960,11 +955,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return;
       }
 
-      const user = await storage.getUser(req.session.userId);
-      if (!user || user.role !== "admin") {
-        res.status(403).json({ error: "Admin access required" });
-        return;
-      }
+      // Allow all authenticated users to reset dashboard config
 
       const saved = await storage.updateDashboardConfig("global", DEFAULT_DASHBOARD_CONFIG);
 
@@ -1385,6 +1376,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   realtimeSignalGenerator.setBroadcastCallback(broadcastSignal);
+
+  // Auto-connect to Zerodha WebSocket on startup if configured
+  (async () => {
+    try {
+      const configs = await storage.getBrokerConfigs();
+      const zerodhaConfig = configs.find(c => c.name === "zerodha" && c.connected);
+      
+      if (zerodhaConfig) {
+        console.log("[Startup] Zerodha is configured, auto-connecting WebSocket...");
+        await realtimeSignalGenerator.initialize();
+        const connected = await realtimeSignalGenerator.connectZerodha();
+        
+        if (connected) {
+          console.log("[Startup] ✅ Zerodha WebSocket auto-connected successfully");
+        } else {
+          console.log("[Startup] ⚠️  Failed to auto-connect Zerodha WebSocket");
+        }
+      } else {
+        console.log("[Startup] Zerodha not configured or not connected - WebSocket not started");
+      }
+    } catch (error) {
+      console.error("[Startup] Error auto-connecting WebSocket:", error);
+    }
+  })();
 
   return httpServer;
 }

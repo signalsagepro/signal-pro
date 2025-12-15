@@ -59,21 +59,21 @@ export class RealtimeSignalGenerator {
   private async subscribeToAssets(broker: string) {
     try {
       const assets = await storage.getAssets();
-      const enabledAssets = assets.filter(a => a.enabled);
+      // Filter to only enabled futures assets
+      const enabledFutures = assets.filter(a => a.enabled && a.type === "indian_futures");
 
-      if (enabledAssets.length === 0) {
-        console.log("[Realtime Signals] No enabled assets to subscribe");
+      if (enabledFutures.length === 0) {
+        console.log("[Realtime Signals] No enabled futures assets to subscribe");
         return;
       }
 
       // For Zerodha, we need instrument tokens
-      // For now, we'll use common stocks - in production, fetch from Zerodha instruments API
-      const instrumentTokens = this.getInstrumentTokens(enabledAssets);
+      const instrumentTokens = this.getInstrumentTokens(enabledFutures);
 
       if (instrumentTokens.length > 0) {
         const success = brokerWebSocket.subscribe(broker, instrumentTokens);
         if (success) {
-          console.log(`[Realtime Signals] Subscribed to ${instrumentTokens.length} instruments on ${broker}`);
+          console.log(`[Realtime Signals] Subscribed to ${instrumentTokens.length} futures instruments on ${broker}`);
         }
       }
     } catch (error) {
@@ -86,8 +86,23 @@ export class RealtimeSignalGenerator {
    * TODO: Fetch from Zerodha instruments API
    */
   private getInstrumentTokens(assets: any[]): number[] {
-    // Common NSE stock tokens (these are examples - fetch from Zerodha instruments CSV in production)
+    // Instrument tokens for Indian futures and indices
+    // Note: These are example tokens - in production, fetch from Zerodha instruments CSV
     const knownTokens: Record<string, number> = {
+      // Index Futures (NSE)
+      "NIFTY50": 256265,      // Nifty 50 Index
+      "BANKNIFTY": 260105,    // Bank Nifty Index
+      "FINNIFTY": 257801,     // Finnifty Index
+      "MIDCPNIFTY": 288009,   // Midcap Nifty Index
+      "NIFTYNXT50": 261897,   // Nifty Next 50
+      
+      // Commodity Futures (MCX)
+      "GOLD": 261441,         // Gold Futures
+      "SILVER": 261449,       // Silver Futures
+      "CRUDEOIL": 261633,     // Crude Oil Futures
+      "NATURALGAS": 261641,   // Natural Gas Futures
+      
+      // Stock Futures (NSE) - Popular stocks
       "RELIANCE": 738561,
       "TCS": 2953217,
       "INFY": 408065,
@@ -117,6 +132,8 @@ export class RealtimeSignalGenerator {
           exchange: asset.exchange || "NSE",
         });
         this.tokenToAssetMap.set(token, asset.id);
+      } else {
+        console.log(`[Realtime Signals] No instrument token found for ${asset.symbol}`);
       }
     }
 
