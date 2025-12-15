@@ -118,6 +118,8 @@ export class RealtimeSignalGenerator {
       "MARUTI": 2815745,
       "BAJFINANCE": 81153,
       "ASIANPAINT": 60417,
+      "BAJAJFINSV": 4268801,
+      "WIPRO": 969473,
     };
 
     const tokens: number[] = [];
@@ -159,10 +161,10 @@ export class RealtimeSignalGenerator {
 
       console.log(`[Realtime Signals] ${assetInfo.symbol}: ₹${tickData.lastPrice} (EMA50: ${tickData.ema50?.toFixed(2)}, EMA200: ${tickData.ema200?.toFixed(2)})`);
 
-      // Create market data for signal detection
-      const marketData: MarketData = {
+      // Create market data for signal detection - try both 5m and 15m timeframes
+      const marketData5m: MarketData = {
         assetId: assetInfo.assetId,
-        timeframe: "1m", // Real-time ticks
+        timeframe: "5m",
         price: tickData.lastPrice,
         high: tickData.high,
         low: tickData.low,
@@ -171,8 +173,26 @@ export class RealtimeSignalGenerator {
         ema200: tickData.ema200,
       };
 
-      // Detect signals
-      const signals = await signalDetector.detectSignals(marketData);
+      const marketData15m: MarketData = {
+        assetId: assetInfo.assetId,
+        timeframe: "15m",
+        price: tickData.lastPrice,
+        high: tickData.high,
+        low: tickData.low,
+        open: tickData.open,
+        ema50: tickData.ema50,
+        ema200: tickData.ema200,
+      };
+
+      // Detect signals for both timeframes
+      const signals5m = await signalDetector.detectSignals(marketData5m);
+      const signals15m = await signalDetector.detectSignals(marketData15m);
+      const signals = [...signals5m, ...signals15m];
+
+      // Debug logging
+      if (signals.length === 0) {
+        console.log(`[Realtime Signals] No signals detected for ${assetInfo.symbol} - Price: ₹${tickData.lastPrice}, EMA50: ${tickData.ema50?.toFixed(2)}, EMA200: ${tickData.ema200?.toFixed(2)}`);
+      }
 
       // Broadcast signals
       for (const signal of signals) {
@@ -202,20 +222,36 @@ export class RealtimeSignalGenerator {
    */
   async connectZerodha() {
     try {
+      console.log("[Realtime Signals] Starting Zerodha connection...");
       const configs = await storage.getBrokerConfigs();
+      console.log("[Realtime Signals] Found", configs.length, "broker configs");
+      
       const zerodhaConfig = configs.find(c => c.name === "zerodha" && c.connected);
-
+      console.log("[Realtime Signals] Zerodha config found:", !!zerodhaConfig);
+      
       if (!zerodhaConfig) {
-        console.error("[Realtime Signals] Zerodha not connected");
+        console.error("[Realtime Signals] Zerodha not connected or not found");
+        console.log("[Realtime Signals] Available configs:", configs.map(c => ({ name: c.name, connected: c.connected })));
         return false;
       }
+
+      console.log("[Realtime Signals] Zerodha config details:", {
+        name: zerodhaConfig.name,
+        connected: zerodhaConfig.connected,
+        hasApiKey: !!zerodhaConfig.apiKey,
+        hasMetadata: !!zerodhaConfig.metadata
+      });
 
       const metadata = zerodhaConfig.metadata as Record<string, any> || {};
+      console.log("[Realtime Signals] Metadata keys:", Object.keys(metadata));
+      
       if (!metadata.accessToken) {
-        console.error("[Realtime Signals] No access token found");
+        console.error("[Realtime Signals] No access token found in metadata");
+        console.log("[Realtime Signals] Available metadata:", metadata);
         return false;
       }
 
+      console.log("[Realtime Signals] Access token found, connecting to WebSocket...");
       const connected = await brokerWebSocket.connectZerodha({
         apiKey: zerodhaConfig.apiKey!,
         accessToken: metadata.accessToken,
@@ -223,14 +259,14 @@ export class RealtimeSignalGenerator {
       });
 
       if (connected) {
-        console.log("[Realtime Signals] Connected to Zerodha WebSocket");
+        console.log("[Realtime Signals] ✅ Connected to Zerodha WebSocket successfully");
         return true;
       } else {
-        console.error("[Realtime Signals] Failed to connect to Zerodha WebSocket");
+        console.error("[Realtime Signals] ❌ Failed to connect to Zerodha WebSocket");
         return false;
       }
     } catch (error) {
-      console.error("[Realtime Signals] Error connecting to Zerodha:", error);
+      console.error("[Realtime Signals] ❌ Exception connecting to Zerodha:", error);
       return false;
     }
   }

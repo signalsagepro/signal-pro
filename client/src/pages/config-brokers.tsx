@@ -67,16 +67,28 @@ function ConfigBrokersContent() {
   // Check if Zerodha is connected
   const zerodhaConnected = brokerConfigs.some(c => c.name === "zerodha" && c.connected);
 
-  // Check real-time status on mount
+  // Check real-time status on mount and periodically
   useEffect(() => {
-    if (zerodhaConnected) {
-      fetch("/api/realtime/status", { credentials: "include" })
-        .then(res => res.json())
-        .then(data => {
-          setRealtimeActive(data.websocketStatus?.zerodha === "connected");
-        })
-        .catch(console.error);
-    }
+    const checkStatus = () => {
+      if (zerodhaConnected) {
+        fetch("/api/realtime/status", { credentials: "include" })
+          .then(res => res.json())
+          .then(data => {
+            console.log("[Config Brokers] WebSocket status data:", data);
+            // Check if zerodha WebSocket is connected (boolean true)
+            setRealtimeActive(data.websocketStatus?.zerodha === true);
+          })
+          .catch(console.error);
+      }
+    };
+
+    // Check immediately
+    checkStatus();
+    
+    // Check every 5 seconds to keep status updated
+    const interval = setInterval(checkStatus, 5000);
+    
+    return () => clearInterval(interval);
   }, [zerodhaConnected]);
 
   // Listen for OAuth popup messages

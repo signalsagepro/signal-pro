@@ -43,13 +43,22 @@ export class BrokerWebSocketManager extends EventEmitter {
    */
   async connectZerodha(config: BrokerWebSocketConfig): Promise<boolean> {
     const wsUrl = `wss://ws.kite.trade?api_key=${config.apiKey}&access_token=${config.accessToken}`;
+    console.log("[Zerodha WS] Attempting connection to:", wsUrl.replace(config.accessToken, '***TOKEN***'));
     
     return new Promise((resolve) => {
       try {
         const ws = new WebSocket(wsUrl);
         
+        // Set a timeout for connection
+        const connectionTimeout = setTimeout(() => {
+          console.error("[Zerodha WS] Connection timeout after 10 seconds");
+          ws.terminate();
+          resolve(false);
+        }, 10000);
+        
         ws.on("open", () => {
-          console.log("[Zerodha WS] Connected");
+          clearTimeout(connectionTimeout);
+          console.log("[Zerodha WS] ✅ Connected successfully");
           this.connections.set("zerodha", ws);
           this.reconnectAttempts.set("zerodha", 0);
           this.emit("connected", { broker: "zerodha" });
@@ -57,24 +66,28 @@ export class BrokerWebSocketManager extends EventEmitter {
         });
 
         ws.on("message", (data: Buffer) => {
+          console.log("[Zerodha WS] Received message, length:", data.length);
           this.handleZerodhaMessage(data);
         });
 
-        ws.on("close", () => {
-          console.log("[Zerodha WS] Disconnected");
+        ws.on("close", (code, reason) => {
+          clearTimeout(connectionTimeout);
+          console.log("[Zerodha WS] Disconnected with code:", code, "reason:", reason.toString());
           this.connections.delete("zerodha");
           this.emit("disconnected", { broker: "zerodha" });
           this.attemptReconnect("zerodha", config);
         });
 
         ws.on("error", (error) => {
-          console.error("[Zerodha WS] Error:", error.message);
+          clearTimeout(connectionTimeout);
+          console.error("[Zerodha WS] ❌ Connection error:", error.message);
+          console.error("[Zerodha WS] Error details:", error);
           this.emit("error", { broker: "zerodha", error: error.message });
           resolve(false);
         });
 
       } catch (error) {
-        console.error("[Zerodha WS] Connection failed:", error);
+        console.error("[Zerodha WS] ❌ Exception during connection:", error);
         resolve(false);
       }
     });

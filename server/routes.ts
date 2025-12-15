@@ -908,14 +908,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/dashboard-config", async (req, res) => {
     try {
+      console.log("[Dashboard Config API] GET request received");
+      console.log("[Dashboard Config API] Session userId:", req.session?.userId);
+      
       if (!req.session?.userId) {
+        console.log("[Dashboard Config API] Unauthorized - no session userId");
         res.status(401).json({ error: "Unauthorized" });
         return;
       }
       
+      console.log("[Dashboard Config API] Fetching dashboard config...");
       const config = await storage.getDashboardConfig("global");
-      res.json(config?.config || DEFAULT_DASHBOARD_CONFIG);
+      console.log("[Dashboard Config API] Config fetched:", !!config);
+      
+      const responseConfig = config?.config || DEFAULT_DASHBOARD_CONFIG;
+      console.log("[Dashboard Config API] Responding with config keys:", Object.keys(responseConfig));
+      res.json(responseConfig);
     } catch (error) {
+      console.error("[Dashboard Config API] Error fetching config:", error);
       res.status(500).json({ error: "Failed to fetch dashboard config" });
     }
   });
@@ -1213,9 +1223,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // Generate signals if we have EMA data
     if (tickData.ema50 && tickData.ema200) {
       try {
+        // Get asset ID from token mapping
+        const assetTokenMap = realtimeSignalGenerator.getAssetTokenMap();
+        const assetInfo = assetTokenMap.get(tickData.symbol);
+        
+        if (!assetInfo) {
+          console.log(`[Routes] No asset mapping found for ${tickData.symbol}`);
+          return;
+        }
+
         const signals = await signalDetector.detectSignals({
-          assetId: tickData.symbol,
-          timeframe: "5m",
+          assetId: assetInfo.assetId,
+          timeframe: "5m", // Match strategy timeframes
           price: tickData.lastPrice,
           high: tickData.high,
           low: tickData.low,

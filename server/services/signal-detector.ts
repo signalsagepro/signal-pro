@@ -141,9 +141,17 @@ export class SignalDetector {
     const signals: InsertSignal[] = [];
     const dbStrategies = await storage.getStrategies();
 
+    console.log(`[Signal Detector] Checking ${dbStrategies.length} strategies for ${data.assetId} (${data.timeframe})`);
+
     for (const dbStrategy of dbStrategies) {
-      if (!dbStrategy.enabled) continue;
-      if (dbStrategy.timeframe !== data.timeframe) continue;
+      if (!dbStrategy.enabled) {
+        console.log(`[Signal Detector] Skipping disabled strategy: ${dbStrategy.name}`);
+        continue;
+      }
+      if (dbStrategy.timeframe !== data.timeframe) {
+        console.log(`[Signal Detector] Skipping strategy ${dbStrategy.name} - timeframe mismatch (${dbStrategy.timeframe} vs ${data.timeframe})`);
+        continue;
+      }
 
       let strategyImpl = this.strategies.get(dbStrategy.type);
 
@@ -151,10 +159,14 @@ export class SignalDetector {
         strategyImpl = new CustomFormulaStrategy(dbStrategy.formula, dbStrategy.type);
       }
 
-      if (!strategyImpl) continue;
+      if (!strategyImpl) {
+        console.log(`[Signal Detector] No implementation found for strategy type: ${dbStrategy.type}`);
+        continue;
+      }
 
       try {
         const shouldSignal = strategyImpl.check(data);
+        console.log(`[Signal Detector] Strategy ${dbStrategy.name} (${dbStrategy.type}): ${shouldSignal ? 'TRIGGERED' : 'not triggered'}`);
 
         if (shouldSignal) {
           signals.push({
@@ -174,6 +186,7 @@ export class SignalDetector {
       }
     }
 
+    console.log(`[Signal Detector] Generated ${signals.length} signals`);
     return signals;
   }
 }

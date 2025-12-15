@@ -321,8 +321,15 @@ export class DatabaseStorage implements IStorageWithLogs {
 
   // ============ DASHBOARD CONFIG ============
   async getDashboardConfig(key: string = "global"): Promise<DashboardConfig | undefined> {
-    const [config] = await db.select().from(dashboardConfigs).where(eq(dashboardConfigs.key, key));
-    return config;
+    try {
+      console.log("[DB Storage] Getting dashboard config for key:", key);
+      const [config] = await db.select().from(dashboardConfigs).where(eq(dashboardConfigs.key, key));
+      console.log("[DB Storage] Dashboard config result:", !!config);
+      return config;
+    } catch (error) {
+      console.error("[DB Storage] Error getting dashboard config:", error);
+      throw error;
+    }
   }
 
   async updateDashboardConfig(key: string, config: Record<string, any>): Promise<DashboardConfig> {

@@ -6,12 +6,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { TradingChart } from "@/components/trading-chart";
 import { useDashboardConfig } from "@/hooks/use-dashboard-config";
 import { useAuth } from "@/hooks/use-auth";
+import { useWebSocket } from "@/hooks/use-websocket";
 import type { Signal as SignalType, Strategy, Asset } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
 
 export default function Dashboard() {
   const { user } = useAuth();
   const { config, isLoaded } = useDashboardConfig();
+  const { isConnected } = useWebSocket();
   const isAdmin = user?.role === "admin";
 
   const { data: signals = [], isLoading: signalsLoading } = useQuery<SignalType[]>({
@@ -69,9 +71,9 @@ export default function Dashboard() {
     },
     {
       title: "System Status",
-      value: "Online",
+      value: isConnected ? "Live" : "Offline",
       icon: Activity,
-      color: "text-status-online",
+      color: isConnected ? "text-emerald-600" : "text-red-500",
       testId: "metric-system-status",
     },
   ];
