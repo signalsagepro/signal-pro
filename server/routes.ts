@@ -1309,11 +1309,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const configs = await storage.getBrokerConfigs();
       const zerodhaConnected = configs.some(c => c.name === "zerodha" && c.connected);
       const wsStatus = brokerWebSocket.getStatus();
+      const assetTokenMap = realtimeSignalGenerator.getAssetTokenMap();
+      const allTicks = brokerWebSocket.getAllLatestTicks();
+
+      // Get sample tick keys for debugging
+      const tickKeys = Array.from(allTicks.keys()).slice(0, 5);
+      const tokenMapKeys = Array.from(assetTokenMap.keys()).slice(0, 5);
 
       res.json({ 
         zerodhaConnected,
         websocketStatus: wsStatus,
-        mode: "realtime"
+        mode: "realtime",
+        debug: {
+          assetTokenMapSize: assetTokenMap.size,
+          allTicksSize: allTicks.size,
+          sampleTickKeys: tickKeys,
+          sampleTokenMapKeys: tokenMapKeys,
+        }
       });
     } catch (error) {
       res.status(500).json({ error: "Failed to get status" });
@@ -1328,30 +1340,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return;
       }
 
-      const assets = await storage.getAssets();
       const assetTokenMap = realtimeSignalGenerator.getAssetTokenMap();
       const allTicks = brokerWebSocket.getAllLatestTicks();
       
+      console.log(`[Live Prices] Asset token map size: ${assetTokenMap.size}`);
+      console.log(`[Live Prices] All ticks size: ${allTicks.size}`);
+      
       const livePrices: Record<string, any> = {};
 
-      // Map ticks to assets
+      // Map ticks to assets using TOKEN_${instrumentToken} format
       const tickEntries = Array.from(allTicks.entries());
       for (const [key, tick] of tickEntries) {
+        // tick.symbol is in format "TOKEN_12345" or "zerodha:TOKEN_12345"
         const assetInfo = assetTokenMap.get(tick.symbol);
+        
         if (assetInfo) {
+          // Calculate change percentage if we have open price
+          let changePercent = tick.changePercent || 0;
+          if (tick.open && tick.open > 0 && changePercent === 0) {
+            changePercent = ((tick.lastPrice - tick.open) / tick.open) * 100;
+          }
+
           livePrices[assetInfo.assetId] = {
             symbol: assetInfo.symbol,
             lastPrice: tick.lastPrice,
             open: tick.open,
             high: tick.high,
             low: tick.low,
-            change: tick.change,
-            changePercent: tick.changePercent,
+            change: tick.change || (tick.lastPrice - tick.open),
+            changePercent: changePercent,
             timestamp: tick.timestamp,
           };
+        } else {
+          console.log(`[Live Prices] No asset info for tick symbol: ${tick.symbol}`);
         }
       }
 
+      console.log(`[Live Prices] Returning ${Object.keys(livePrices).length} prices`);
       res.json({ prices: livePrices });
     } catch (error) {
       console.error("Error fetching live prices:", error);

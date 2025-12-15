@@ -116,7 +116,7 @@ export function useDashboardConfig() {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify(updated),
+        body: JSON.stringify(newConfig), // Send only the changed fields
       });
       
       if (response.ok) {
