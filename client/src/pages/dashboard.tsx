@@ -8,7 +8,7 @@ import { useDashboardConfig } from "@/hooks/use-dashboard-config";
 import { useAuth } from "@/hooks/use-auth";
 import { useWebSocket } from "@/hooks/use-websocket";
 import type { Signal as SignalType, Strategy, Asset } from "@shared/schema";
-import { formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow, format } from "date-fns";
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -236,7 +236,7 @@ export default function Dashboard() {
                           <span>EMA200: {signal.ema200.toFixed(2)}</span>
                         </div>
                         <div className="text-xs text-muted-foreground">
-                          {strategy?.name} • {formatDistanceToNow(new Date(signal.createdAt), { addSuffix: true })}
+                          {strategy?.name} • {format(new Date(signal.createdAt), "h:mm:ss a")} • {formatDistanceToNow(new Date(signal.createdAt), { addSuffix: true })}
                         </div>
                       </div>
                     </div>

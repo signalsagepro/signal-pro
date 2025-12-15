@@ -156,8 +156,10 @@ export class DatabaseStorage implements IStorageWithLogs {
     }).returning();
 
     // Increment signal count for the strategy
+    const currentStrategy = await this.getStrategy(insertSignal.strategyId);
+    const newCount = (currentStrategy?.signalCount ?? 0) + 1;
     await db.update(strategies)
-      .set({ signalCount: (await this.getStrategy(insertSignal.strategyId))?.signalCount ?? 0 + 1 })
+      .set({ signalCount: newCount })
       .where(eq(strategies.id, insertSignal.strategyId));
 
     return signal;

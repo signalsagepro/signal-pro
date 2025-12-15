@@ -4,6 +4,50 @@ import { brokerWebSocket } from "./broker-websocket";
 import type { SignalBroadcastCallback } from "./market-data-generator";
 
 /**
+ * Check if Indian stock market is currently open
+ * Market hours: 9:15 AM - 3:30 PM IST (Monday to Friday)
+ */
+function isMarketOpen(): boolean {
+  const now = new Date();
+  
+  // Convert to IST (UTC+5:30)
+  const istOffset = 5.5 * 60; // 5 hours 30 minutes in minutes
+  const utcMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
+  const istMinutes = utcMinutes + istOffset;
+  
+  // Handle day overflow
+  const istHours = Math.floor((istMinutes % 1440) / 60);
+  const istMins = istMinutes % 60;
+  
+  // Get day of week in IST
+  const istDate = new Date(now.getTime() + istOffset * 60 * 1000);
+  const dayOfWeek = istDate.getUTCDay();
+  
+  // Market closed on weekends (Saturday = 6, Sunday = 0)
+  if (dayOfWeek === 0 || dayOfWeek === 6) {
+    return false;
+  }
+  
+  // Market hours: 9:15 AM to 3:30 PM IST
+  const marketOpenMinutes = 9 * 60 + 15;  // 9:15 AM = 555 minutes
+  const marketCloseMinutes = 15 * 60 + 30; // 3:30 PM = 930 minutes
+  
+  const currentISTMinutes = istHours * 60 + istMins;
+  
+  return currentISTMinutes >= marketOpenMinutes && currentISTMinutes <= marketCloseMinutes;
+}
+
+/**
+ * Get current IST time as string for logging
+ */
+function getISTTimeString(): string {
+  const now = new Date();
+  const istOffset = 5.5 * 60 * 60 * 1000; // 5 hours 30 minutes in milliseconds
+  const istTime = new Date(now.getTime() + istOffset);
+  return istTime.toISOString().replace('T', ' ').substring(0, 19) + ' IST';
+}
+
+/**
  * Real-time Signal Generator using WebSocket tick data
  * Replaces simulated market data with actual broker feeds
  */
@@ -147,6 +191,12 @@ export class RealtimeSignalGenerator {
    */
   private async processTickData(tickData: any) {
     try {
+      // Check if market is open before generating signals
+      if (!isMarketOpen()) {
+        // Market is closed - don't generate signals
+        return;
+      }
+
       // Map instrument token to asset
       const assetInfo = this.assetTokenMap.get(tickData.symbol);
       if (!assetInfo) {

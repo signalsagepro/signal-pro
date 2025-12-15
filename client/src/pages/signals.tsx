@@ -18,6 +18,16 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Signal, Strategy, Asset } from "@shared/schema";
 import { formatDistanceToNow, format } from "date-fns";
 
+// Aggregated signal type for grouping
+interface AggregatedSignal {
+  assetId: string;
+  assetSymbol: string;
+  assetName: string;
+  latestSignal: Signal;
+  signalCount: number;
+  signals: Signal[];
+}
+
 export default function Signals() {
   const [searchQuery, setSearchQuery] = useState("");
   const [timeframeFilter, setTimeframeFilter] = useState<string>("all");
@@ -48,6 +58,7 @@ export default function Signals() {
     },
   });
 
+  // Filter signals first
   const filteredSignals = signals.filter((signal) => {
     const asset = assets.find((a) => a.id === signal.assetId);
     const strategy = strategies.find((s) => s.id === signal.strategyId);
@@ -62,6 +73,43 @@ export default function Signals() {
 
     return matchesSearch && matchesTimeframe && matchesType && !signal.dismissed;
   });
+
+  // Sort by latest first (most recent createdAt)
+  const sortedSignals = [...filteredSignals].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
+
+  // Aggregate signals by asset - group all signals for same asset together
+  const aggregatedSignals: AggregatedSignal[] = [];
+  const assetSignalMap = new Map<string, Signal[]>();
+
+  for (const signal of sortedSignals) {
+    const existing = assetSignalMap.get(signal.assetId);
+    if (existing) {
+      existing.push(signal);
+    } else {
+      assetSignalMap.set(signal.assetId, [signal]);
+    }
+  }
+
+  // Convert to aggregated format, sorted by latest signal time
+  Array.from(assetSignalMap.entries()).forEach(([assetId, assetSignals]) => {
+    const asset = assets.find((a) => a.id === assetId);
+    const latestSignal = assetSignals[0]; // Already sorted, first is latest
+    aggregatedSignals.push({
+      assetId,
+      assetSymbol: asset?.symbol || "Unknown",
+      assetName: asset?.name || "Unknown Asset",
+      latestSignal,
+      signalCount: assetSignals.length,
+      signals: assetSignals,
+    });
+  });
+
+  // Sort aggregated by latest signal time
+  aggregatedSignals.sort(
+    (a, b) => new Date(b.latestSignal.createdAt).getTime() - new Date(a.latestSignal.createdAt).getTime()
+  );
 
   const getSignalTypeLabel = (type: string) => {
     const labels: Record<string, string> = {
@@ -218,13 +266,13 @@ export default function Signals() {
             </div>
           ) : (
             <div className="space-y-4">
-              {filteredSignals.map((signal) => {
-                const asset = assets.find((a) => a.id === signal.assetId);
+              {aggregatedSignals.map((agg) => {
+                const signal = agg.latestSignal;
                 const strategy = strategies.find((s) => s.id === signal.strategyId);
                 const Icon = getSignalIcon(signal.type);
 
                 return (
-                  <Card key={signal.id} data-testid={`signal-${signal.id}`} className="shadow-sm hover:shadow-md transition-shadow border-l-4" style={{borderLeftColor: signal.type.includes("bullish") || signal.type.includes("reversal") ? "hsl(var(--chart-2))" : signal.type.includes("pullback") ? "hsl(var(--chart-3))" : "hsl(var(--destructive))"}}>
+                  <Card key={agg.assetId} data-testid={`signal-${signal.id}`} className="shadow-sm hover:shadow-md transition-shadow border-l-4" style={{borderLeftColor: signal.type.includes("bullish") || signal.type.includes("reversal") ? "hsl(var(--chart-2))" : signal.type.includes("pullback") ? "hsl(var(--chart-3))" : "hsl(var(--destructive))"}}>
                     <CardContent className="p-4">
                       <div className="flex items-start gap-4">
                         <div className={`p-3 rounded-lg flex-shrink-0 ${
@@ -241,14 +289,19 @@ export default function Signals() {
                             <div className="space-y-2 min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">
                                 <span className="text-xl font-mono font-bold text-primary">
-                                  {asset?.symbol || "Unknown"}
+                                  {agg.assetSymbol}
                                 </span>
                                 <Badge className="text-xs font-semibold">
                                   {signal.timeframe.toUpperCase()}
                                 </Badge>
+                                {agg.signalCount > 1 && (
+                                  <Badge variant="secondary" className="text-xs font-semibold">
+                                    {agg.signalCount} signals
+                                  </Badge>
+                                )}
                               </div>
                               <p className="text-sm text-muted-foreground font-medium truncate">
-                                {asset?.name || "Unknown Asset"}
+                                {agg.assetName}
                               </p>
                             </div>
                             <Button
@@ -264,9 +317,9 @@ export default function Signals() {
                           </div>
                           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-3 rounded-lg bg-muted/60">
                             <div>
-                              <div className="text-xs text-muted-foreground mb-1">Price</div>
+                              <div className="text-xs text-muted-foreground mb-1">Latest Price</div>
                               <div className="text-sm font-mono font-semibold">
-                                {signal.price.toFixed(2)}
+                                ₹{signal.price.toFixed(2)}
                               </div>
                             </div>
                             <div>
@@ -285,7 +338,7 @@ export default function Signals() {
                           <div className="flex items-center justify-between text-xs text-muted-foreground flex-wrap gap-2">
                             <span>{strategy?.name || "Unknown Strategy"}</span>
                             <span>
-                              {format(new Date(signal.createdAt), "MMM d, yyyy 'at' h:mm a")} •{" "}
+                              {format(new Date(signal.createdAt), "MMM d, yyyy 'at' h:mm:ss a")} •{" "}
                               {formatDistanceToNow(new Date(signal.createdAt), { addSuffix: true })}
                             </span>
                           </div>
