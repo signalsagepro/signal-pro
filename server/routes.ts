@@ -881,125 +881,103 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ============ DASHBOARD CONFIG API ============
-  // Global dashboard configuration that applies to all users
-  let globalDashboardConfig: Record<string, any> = {
+  // Global dashboard configuration that applies to all users (now persisted in database)
+  const DEFAULT_DASHBOARD_CONFIG = {
     // Dashboard component visibility
     showMetricCards: true,
     showNiftyChart: true,
     showSensexChart: true,
-    showRecentSignals: true,
-    showActiveStrategies: true,
-    showConnectedAssets: true,
-    // Role-based visibility for dashboard
-    adminOnlyMetrics: false,
-    adminOnlyCharts: false,
-    adminOnlySignals: false,
-    adminOnlyStrategies: false,
-    adminOnlyAssets: false,
-    // Sidebar section visibility
-    showDashboardSection: true,
-    showStrategiesSection: true,
-    showAssetsSection: true,
-    showSignalsSection: true,
-    showChartsSection: true,
-    // Admin-only sidebar sections
-    adminOnlyStrategiesSection: false,
-    adminOnlyAssetsSection: false,
-    adminOnlySignalsSection: false,
-    adminOnlyChartsSection: false,
+    showSignalsTable: true,
+    showStrategiesTable: true,
+    showAssetsTable: true,
+    showRecentActivity: true,
+
+    // Chart settings
+    niftyChartHeight: 300,
+    sensexChartHeight: 300,
+
+    // Table settings
+    signalsTablePageSize: 10,
+    strategiesTablePageSize: 10,
+    assetsTablePageSize: 10,
+
+    // Refresh intervals (in seconds)
+    signalsRefreshInterval: 30,
+    chartsRefreshInterval: 60,
   };
 
-  // Get global dashboard config (accessible to all authenticated users)
-  app.get("/api/dashboard-config", async (req: Request, res: Response) => {
+  app.get("/api/dashboard-config", async (req, res) => {
     try {
       if (!req.session?.userId) {
         res.status(401).json({ error: "Unauthorized" });
         return;
       }
-      res.json(globalDashboardConfig);
+      
+      const config = await storage.getDashboardConfig("global");
+      res.json(config?.config || DEFAULT_DASHBOARD_CONFIG);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch dashboard config" });
     }
   });
 
-  // Update global dashboard config (admin only)
-  app.put("/api/dashboard-config", async (req: Request, res: Response) => {
+  app.put("/api/dashboard-config", async (req, res) => {
     try {
       if (!req.session?.userId) {
         res.status(401).json({ error: "Unauthorized" });
         return;
       }
-      // Fetch user from storage to verify admin role
+
       const user = await storage.getUser(req.session.userId);
       if (!user || user.role !== "admin") {
-        res.status(403).json({ error: "Forbidden - admin access required" });
+        res.status(403).json({ error: "Admin access required" });
         return;
       }
 
-      globalDashboardConfig = { ...globalDashboardConfig, ...req.body };
+      const currentConfig = await storage.getDashboardConfig("global");
+      const updatedConfig = { ...(currentConfig?.config || DEFAULT_DASHBOARD_CONFIG), ...req.body };
+      
+      const saved = await storage.updateDashboardConfig("global", updatedConfig);
       
       await createActivityLog(
         "update_dashboard_config",
         "dashboard_config",
         undefined,
         req.session.userId,
-        { config: globalDashboardConfig },
+        { config: saved.config },
         req
       );
 
-      res.json(globalDashboardConfig);
+      res.json(saved.config);
     } catch (error) {
       res.status(500).json({ error: "Failed to update dashboard config" });
     }
   });
 
-  // Reset dashboard config to defaults (admin only)
-  app.post("/api/dashboard-config/reset", async (req: Request, res: Response) => {
+  app.post("/api/dashboard-config/reset", async (req, res) => {
     try {
       if (!req.session?.userId) {
         res.status(401).json({ error: "Unauthorized" });
         return;
       }
-      // Fetch user from storage to verify admin role
+
       const user = await storage.getUser(req.session.userId);
       if (!user || user.role !== "admin") {
-        res.status(403).json({ error: "Forbidden - admin access required" });
+        res.status(403).json({ error: "Admin access required" });
         return;
       }
 
-      globalDashboardConfig = {
-        showMetricCards: true,
-        showNiftyChart: true,
-        showSensexChart: true,
-        showRecentSignals: true,
-        showActiveStrategies: true,
-        showConnectedAssets: true,
-        adminOnlyMetrics: false,
-        adminOnlyCharts: false,
-        adminOnlySignals: false,
-        adminOnlyStrategies: false,
-        adminOnlyAssets: false,
-        showDashboardSection: true,
-        showStrategiesSection: true,
-        showAssetsSection: true,
-        showSignalsSection: true,
-        showChartsSection: true,
-        adminOnlyStrategiesSection: false,
-        adminOnlyAssetsSection: false,
-        adminOnlySignalsSection: false,
-        adminOnlyChartsSection: false,
-      };
+      const saved = await storage.updateDashboardConfig("global", DEFAULT_DASHBOARD_CONFIG);
 
       await createActivityLog(
         "reset_dashboard_config",
         "dashboard_config",
         undefined,
         req.session.userId,
-        { config: globalDashboardConfig },
+        { config: saved.config },
         req
       );
 
-      res.json(globalDashboardConfig);
+      res.json(saved.config);
     } catch (error) {
       res.status(500).json({ error: "Failed to reset dashboard config" });
     }

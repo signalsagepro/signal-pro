@@ -9,6 +9,7 @@ import {
   candleData,
   users,
   logs,
+  dashboardConfigs,
   type Asset,
   type InsertAsset,
   type Strategy,
@@ -25,6 +26,8 @@ import {
   type InsertUser,
   type Log,
   type InsertLog,
+  type DashboardConfig,
+  type InsertDashboardConfig,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { hashPassword, verifyPassword } from "./auth";
@@ -311,12 +314,40 @@ export class DatabaseStorage implements IStorageWithLogs {
       .orderBy(desc(logs.createdAt));
   }
 
-  async createLog(insertLog: InsertLog): Promise<Log> {
-    const [log] = await db.insert(logs).values({
-      ...insertLog,
-      id: randomUUID(),
-    }).returning();
-    return log;
+  async createLog(log: InsertLog): Promise<Log> {
+    const [newLog] = await db.insert(logs).values(log).returning();
+    return newLog;
+  }
+
+  // ============ DASHBOARD CONFIG ============
+  async getDashboardConfig(key: string = "global"): Promise<DashboardConfig | undefined> {
+    const [config] = await db.select().from(dashboardConfigs).where(eq(dashboardConfigs.key, key));
+    return config;
+  }
+
+  async updateDashboardConfig(key: string, config: Record<string, any>): Promise<DashboardConfig> {
+    const existing = await this.getDashboardConfig(key);
+    
+    if (existing) {
+      const [updated] = await db
+        .update(dashboardConfigs)
+        .set({ 
+          config,
+          updatedAt: new Date(),
+        })
+        .where(eq(dashboardConfigs.key, key))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db
+        .insert(dashboardConfigs)
+        .values({ 
+          key,
+          config,
+        })
+        .returning();
+      return created;
+    }
   }
 
   // ============ INITIALIZATION ============

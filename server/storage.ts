@@ -15,6 +15,8 @@ import {
   type InsertUser,
   type Log,
   type InsertLog,
+  type DashboardConfig,
+  type InsertDashboardConfig,
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { hashPassword, verifyPassword } from "./auth";
@@ -61,6 +63,9 @@ export interface IStorage {
   createUser(user: InsertUser): Promise<User>;
   deleteUser(id: string): Promise<boolean>;
   verifyUserPassword(email: string, password: string): Promise<User | undefined>;
+
+  getDashboardConfig(key?: string): Promise<DashboardConfig | undefined>;
+  updateDashboardConfig(key: string, config: Record<string, any>): Promise<DashboardConfig>;
 }
 
 export class MemStorage implements IStorage {
@@ -554,6 +559,36 @@ export class MemStorage implements IStorage {
 
   async deleteUser(id: string): Promise<boolean> {
     return this.users.delete(id);
+  }
+
+  // Dashboard config (in-memory - won't persist)
+  private dashboardConfig: DashboardConfig = {
+    id: randomUUID(),
+    key: "global",
+    config: {
+      showMetricCards: true,
+      showNiftyChart: true,
+      showSensexChart: true,
+      showSignalsTable: true,
+      showStrategiesTable: true,
+      showAssetsTable: true,
+      showRecentActivity: true,
+    },
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+
+  async getDashboardConfig(key: string = "global"): Promise<DashboardConfig | undefined> {
+    return this.dashboardConfig;
+  }
+
+  async updateDashboardConfig(key: string, config: Record<string, any>): Promise<DashboardConfig> {
+    this.dashboardConfig = {
+      ...this.dashboardConfig,
+      config,
+      updatedAt: new Date(),
+    };
+    return this.dashboardConfig;
   }
 }
 

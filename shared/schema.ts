@@ -191,6 +191,24 @@ export const insertLogSchema = createInsertSchema(logs).omit({
 export type InsertLog = z.infer<typeof insertLogSchema>;
 export type Log = typeof logs.$inferSelect;
 
+// Dashboard Configuration table for persisting UI settings
+export const dashboardConfigs = pgTable("dashboard_configs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  key: text("key").notNull().unique().default("global"),
+  config: jsonb("config").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const insertDashboardConfigSchema = createInsertSchema(dashboardConfigs).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertDashboardConfig = z.infer<typeof insertDashboardConfigSchema>;
+export type DashboardConfig = typeof dashboardConfigs.$inferSelect;
+
 export type AssetType = "indian_stock" | "indian_futures" | "forex";
 export type Timeframe = "5m" | "15m";
 export type BrokerType = "indian" | "forex";
