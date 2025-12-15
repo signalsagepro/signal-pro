@@ -87,11 +87,19 @@ export default function DevDashboardSettings() {
 
   // Wrapper to handle save with feedback
   const handleSave = async (newConfig: Partial<DashboardConfig>) => {
+    console.log("[Dashboard Settings] Attempting to save:", newConfig);
     const success = await saveConfig(newConfig);
-    if (!success) {
+    console.log("[Dashboard Settings] Save result:", success);
+    
+    if (success) {
+      toast({
+        title: "Settings saved",
+        description: "Dashboard configuration has been updated successfully.",
+      });
+    } else {
       toast({
         title: "Save failed",
-        description: "You need admin privileges to change global settings.",
+        description: "Failed to save dashboard settings. Check console for details.",
         variant: "destructive",
       });
     }

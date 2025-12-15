@@ -448,15 +448,25 @@ function ConfigBrokersContent() {
                 <p className="text-sm text-emerald-700">
                   {realtimeActive 
                     ? "🟢 Connected to Zerodha WebSocket - receiving live tick data" 
-                    : "⚪ Disconnected - click to start real-time signal generation"}
+                    : "🔄 Connecting to Zerodha WebSocket..."}
+                </p>
+                <p className="text-xs text-emerald-600 mt-1">
+                  WebSocket auto-connects on server startup and reconnects automatically if disconnected
                 </p>
               </div>
-              <Switch
-                checked={realtimeActive}
-                onCheckedChange={handleToggleRealtime}
-                disabled={startingRealtime}
-                className="data-[state=checked]:bg-emerald-600"
-              />
+              <div className="flex items-center gap-2">
+                {realtimeActive ? (
+                  <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-100 rounded-full">
+                    <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+                    <span className="text-xs font-medium text-emerald-700">Live</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-100 rounded-full">
+                    <div className="w-2 h-2 bg-slate-400 rounded-full"></div>
+                    <span className="text-xs font-medium text-slate-600">Connecting</span>
+                  </div>
+                )}
+              </div>
             </div>
           </CardContent>
         </Card>

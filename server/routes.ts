@@ -922,16 +922,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put("/api/dashboard-config", async (req, res) => {
     try {
+      console.log("[Dashboard Config API] PUT request received");
+      console.log("[Dashboard Config API] Session userId:", req.session?.userId);
+      console.log("[Dashboard Config API] Request body:", req.body);
+      
       if (!req.session?.userId) {
+        console.log("[Dashboard Config API] Unauthorized - no session userId");
         res.status(401).json({ error: "Unauthorized" });
         return;
       }
 
       // Allow all authenticated users to update dashboard config
       const currentConfig = await storage.getDashboardConfig("global");
+      console.log("[Dashboard Config API] Current config:", currentConfig?.config);
+      
       const updatedConfig = { ...(currentConfig?.config || DEFAULT_DASHBOARD_CONFIG), ...req.body };
+      console.log("[Dashboard Config API] Updated config:", updatedConfig);
       
       const saved = await storage.updateDashboardConfig("global", updatedConfig);
+      console.log("[Dashboard Config API] Saved config:", saved.config);
       
       await createActivityLog(
         "update_dashboard_config",
@@ -942,8 +951,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         req
       );
 
+      console.log("[Dashboard Config API] Responding with saved config");
       res.json(saved.config);
     } catch (error) {
+      console.error("[Dashboard Config API] Error:", error);
       res.status(500).json({ error: "Failed to update dashboard config" });
     }
   });
@@ -1378,28 +1389,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
   realtimeSignalGenerator.setBroadcastCallback(broadcastSignal);
 
   // Auto-connect to Zerodha WebSocket on startup if configured
-  (async () => {
+  // Use setImmediate to ensure all routes are registered first
+  setImmediate(async () => {
     try {
+      console.log("[Startup] Checking for Zerodha configuration...");
       const configs = await storage.getBrokerConfigs();
       const zerodhaConfig = configs.find(c => c.name === "zerodha" && c.connected);
       
       if (zerodhaConfig) {
-        console.log("[Startup] Zerodha is configured, auto-connecting WebSocket...");
+        console.log("[Startup] ✅ Zerodha is configured and connected");
+        console.log("[Startup] Initializing real-time signal generator...");
         await realtimeSignalGenerator.initialize();
+        
+        console.log("[Startup] Connecting to Zerodha WebSocket...");
         const connected = await realtimeSignalGenerator.connectZerodha();
         
         if (connected) {
           console.log("[Startup] ✅ Zerodha WebSocket auto-connected successfully");
+          console.log("[Startup] 🔄 Real-time signals are now active");
         } else {
           console.log("[Startup] ⚠️  Failed to auto-connect Zerodha WebSocket");
+          console.log("[Startup] Please check your Zerodha access token is valid");
         }
       } else {
-        console.log("[Startup] Zerodha not configured or not connected - WebSocket not started");
+        console.log("[Startup] ⚠️  Zerodha not configured or not connected");
+        console.log("[Startup] Please configure Zerodha in Broker Settings to enable WebSocket");
       }
     } catch (error) {
-      console.error("[Startup] Error auto-connecting WebSocket:", error);
+      console.error("[Startup] ❌ Error auto-connecting WebSocket:", error);
     }
-  })();
+  });
 
   return httpServer;
 }

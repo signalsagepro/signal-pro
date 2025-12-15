@@ -104,12 +104,14 @@ export function useDashboardConfig() {
     };
   }, [loadConfig]);
 
-  // Save config to server (admin only) - applies globally to all users
+  // Save config to server - applies globally to all users
   const saveConfig = async (newConfig: Partial<DashboardConfig>): Promise<boolean> => {
     const updated = { ...config, ...newConfig };
     // Update local state immediately for responsive UI
     setConfig(updated);
     setIsSaving(true);
+    
+    console.log("[Dashboard Config] Saving config:", newConfig);
     
     try {
       const response = await fetch("/api/dashboard-config", {
@@ -119,8 +121,11 @@ export function useDashboardConfig() {
         body: JSON.stringify(newConfig), // Send only the changed fields
       });
       
+      console.log("[Dashboard Config] Response status:", response.status);
+      
       if (response.ok) {
         const data = await response.json();
+        console.log("[Dashboard Config] Save successful, received:", data);
         setConfig(data);
         // Notify other components to reload
         window.dispatchEvent(new CustomEvent(CONFIG_CHANGE_EVENT));
@@ -129,13 +134,13 @@ export function useDashboardConfig() {
       } else {
         // Revert on failure
         const error = await response.json();
-        console.error("Failed to save config:", error);
+        console.error("[Dashboard Config] Save failed with status", response.status, ":", error);
         loadConfig(); // Reload from server to revert
         setIsSaving(false);
         return false;
       }
     } catch (error) {
-      console.error("Failed to save dashboard config:", error);
+      console.error("[Dashboard Config] Exception during save:", error);
       loadConfig(); // Reload from server to revert
       setIsSaving(false);
       return false;
