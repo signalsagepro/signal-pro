@@ -510,6 +510,84 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Verify Zerodha connection by fetching a live quote
+  app.get("/api/broker-configs/:id/verify", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const config = await storage.getBrokerConfig(id);
+      
+      if (!config) {
+        res.status(404).json({ error: "Broker config not found" });
+        return;
+      }
+
+      if (!config.apiKey) {
+        res.status(400).json({ error: "API key not configured" });
+        return;
+      }
+
+      const metadata = config.metadata as Record<string, unknown> | null;
+      if (!metadata?.accessToken) {
+        res.status(400).json({ error: "Not connected - please complete OAuth login first" });
+        return;
+      }
+
+      if (config.name === "zerodha") {
+        const { ZerodhaAdapter } = await import("./services/broker-service");
+        const adapter = new ZerodhaAdapter();
+        
+        // Connect with stored credentials
+        const connectResult = await adapter.connect({
+          apiKey: config.apiKey,
+          apiSecret: config.apiSecret || "",
+          accessToken: metadata.accessToken as string,
+        });
+
+        if (!connectResult.success) {
+          // Token might be expired
+          await storage.updateBrokerConfig(id, { connected: false });
+          res.status(400).json({ 
+            error: "Connection expired", 
+            message: connectResult.message,
+            needsReauth: true 
+          });
+          return;
+        }
+
+        // Try to fetch a live quote to verify API is working
+        const quote = await adapter.getQuote("RELIANCE", "NSE");
+        
+        if (quote) {
+          res.json({
+            success: true,
+            connected: true,
+            userId: metadata.userId,
+            tokenDate: metadata.tokenDate,
+            testQuote: {
+              symbol: quote.symbol,
+              lastPrice: quote.lastPrice,
+              timestamp: quote.timestamp,
+            },
+            message: "Zerodha API is working! Successfully fetched live quote.",
+          });
+        } else {
+          res.json({
+            success: true,
+            connected: true,
+            userId: metadata.userId,
+            tokenDate: metadata.tokenDate,
+            message: "Connected to Zerodha but could not fetch quote (market may be closed).",
+          });
+        }
+      } else {
+        res.status(400).json({ error: "Verification not supported for this broker" });
+      }
+    } catch (error) {
+      console.error("Broker verification error:", error);
+      res.status(500).json({ error: "Verification failed" });
+    }
+  });
+
   // OAuth callback for Zerodha Kite - handles redirect after user login
   app.get("/api/broker-configs/zerodha/callback", async (req, res) => {
     try {
@@ -551,12 +629,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
             ...(zerodhaConfig.metadata as Record<string, unknown> || {}),
             accessToken: result.accessToken,
             userId: result.userId,
+            tokenDate: new Date().toISOString(),
           },
         });
         
-        res.redirect("/settings?broker_connected=zerodha");
+        // Send HTML that closes the popup and notifies parent window
+        res.send(`
+          <!DOCTYPE html>
+          <html>
+          <head><title>Zerodha Connected</title></head>
+          <body>
+            <script>
+              if (window.opener) {
+                window.opener.postMessage({ type: 'zerodha_connected', success: true }, '*');
+                window.close();
+              } else {
+                window.location.href = '/config/brokers?broker_connected=zerodha';
+              }
+            </script>
+            <p>Connection successful! This window will close automatically...</p>
+          </body>
+          </html>
+        `);
       } else {
-        res.redirect(`/settings?broker_error=${encodeURIComponent(result.message || "token_exchange_failed")}`);
+        res.send(`
+          <!DOCTYPE html>
+          <html>
+          <head><title>Connection Failed</title></head>
+          <body>
+            <script>
+              if (window.opener) {
+                window.opener.postMessage({ type: 'zerodha_connected', success: false, error: '${result.message}' }, '*');
+                window.close();
+              } else {
+                window.location.href = '/config/brokers?broker_error=${encodeURIComponent(result.message || "token_exchange_failed")}';
+              }
+            </script>
+            <p>Connection failed. This window will close automatically...</p>
+          </body>
+          </html>
+        `);
       }
     } catch (error) {
       console.error("Zerodha OAuth callback error:", error);

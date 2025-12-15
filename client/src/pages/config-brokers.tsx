@@ -54,12 +54,37 @@ export default function ConfigBrokers() {
 
 function ConfigBrokersContent() {
   const [testingConnection, setTestingConnection] = useState<string | null>(null);
+  const [verifyingConnection, setVerifyingConnection] = useState<string | null>(null);
   const [cardStates, setCardStates] = useState<BrokerCardState>({});
   const { toast } = useToast();
 
   const { data: brokerConfigs = [], isLoading } = useQuery<BrokerConfig[]>({
     queryKey: ["/api/broker-configs"],
   });
+
+  // Listen for OAuth popup messages
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data.type === 'zerodha_connected') {
+        if (event.data.success) {
+          toast({
+            title: "Zerodha Connected!",
+            description: "Successfully authenticated with Zerodha Kite.",
+          });
+          queryClient.invalidateQueries({ queryKey: ["/api/broker-configs"] });
+        } else {
+          toast({
+            title: "Connection Failed",
+            description: event.data.error || "Failed to connect to Zerodha",
+            variant: "destructive",
+          });
+        }
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [toast]);
 
   const saveMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: Partial<BrokerConfig> }) =>
@@ -143,6 +168,44 @@ function ConfigBrokersContent() {
     
     setTestingConnection(configId);
     testConnectionMutation.mutate(configId);
+  };
+
+  const handleVerifyConnection = async (configId: string) => {
+    setVerifyingConnection(configId);
+    try {
+      const response = await fetch(`/api/broker-configs/${configId}/verify`);
+      const data = await response.json();
+      
+      if (response.ok && data.success) {
+        toast({
+          title: "✅ Connection Verified!",
+          description: data.testQuote 
+            ? `Live quote: ${data.testQuote.symbol} @ ₹${data.testQuote.lastPrice}`
+            : data.message,
+        });
+      } else if (data.needsReauth) {
+        toast({
+          title: "Token Expired",
+          description: "Please reconnect - Zerodha tokens expire daily at 6 AM.",
+          variant: "destructive",
+        });
+        queryClient.invalidateQueries({ queryKey: ["/api/broker-configs"] });
+      } else {
+        toast({
+          title: "Verification Failed",
+          description: data.error || data.message || "Could not verify connection",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Verification Error",
+        description: "Failed to verify broker connection",
+        variant: "destructive",
+      });
+    } finally {
+      setVerifyingConnection(null);
+    }
   };
 
   const renderBrokerCard = (broker: typeof INDIAN_BROKERS[0] | typeof FOREX_BROKERS[0], type: "indian" | "forex") => {
@@ -240,7 +303,29 @@ function ConfigBrokersContent() {
             />
           </div>
         </CardContent>
-        <CardFooter className="flex items-center gap-2 justify-end border-t pt-4">
+        <CardFooter className="flex items-center gap-2 justify-end border-t pt-4 flex-wrap">
+          {config && config.connected && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => handleVerifyConnection(config.id)}
+              disabled={verifyingConnection === config.id}
+              className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+              data-testid={`button-verify-${broker.id}`}
+            >
+              {verifyingConnection === config.id ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Verifying...
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="h-4 w-4 mr-1" />
+                  Verify API
+                </>
+              )}
+            </Button>
+          )}
           {config && (
             <Button
               variant="outline"
@@ -252,10 +337,10 @@ function ConfigBrokersContent() {
               {testingConnection === config.id ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Testing...
+                  {config.connected ? "Reconnecting..." : "Connecting..."}
                 </>
               ) : (
-                "Test Connection"
+                config.connected ? "Reconnect" : "Connect"
               )}
             </Button>
           )}
