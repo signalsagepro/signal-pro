@@ -56,11 +56,15 @@ function ConfigBrokersContent() {
   const [testingConnection, setTestingConnection] = useState<string | null>(null);
   const [verifyingConnection, setVerifyingConnection] = useState<string | null>(null);
   const [cardStates, setCardStates] = useState<BrokerCardState>({});
+  const [liveDataEnabled, setLiveDataEnabled] = useState(false);
   const { toast } = useToast();
 
   const { data: brokerConfigs = [], isLoading } = useQuery<BrokerConfig[]>({
     queryKey: ["/api/broker-configs"],
   });
+
+  // Check if Zerodha is connected
+  const zerodhaConnected = brokerConfigs.some(c => c.name === "zerodha" && c.connected);
 
   // Listen for OAuth popup messages
   useEffect(() => {
@@ -380,12 +384,66 @@ function ConfigBrokersContent() {
     );
   }
 
+  const handleToggleLiveData = async () => {
+    try {
+      const response = await fetch("/api/market-data/toggle-live", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ enabled: !liveDataEnabled }),
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        setLiveDataEnabled(!liveDataEnabled);
+        toast({
+          title: data.mode === "live" ? "Live Data Enabled" : "Simulated Data Enabled",
+          description: data.message,
+        });
+      } else {
+        toast({
+          title: "Failed to toggle data mode",
+          description: data.error || "An error occurred",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to toggle live data mode",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="space-y-2">
         <h1 className="text-3xl font-bold tracking-tight">Broker Configuration</h1>
         <p className="text-muted-foreground">Connect your trading broker accounts</p>
       </div>
+
+      {zerodhaConnected && (
+        <Card className="border-emerald-200 bg-emerald-50/50">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <h3 className="font-semibold text-emerald-900">Live Market Data</h3>
+                <p className="text-sm text-emerald-700">
+                  {liveDataEnabled 
+                    ? "Using real-time prices from Zerodha for signal generation" 
+                    : "Using simulated data for signal generation"}
+                </p>
+              </div>
+              <Switch
+                checked={liveDataEnabled}
+                onCheckedChange={handleToggleLiveData}
+                className="data-[state=checked]:bg-emerald-600"
+              />
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Tabs defaultValue="indian" className="w-full">
         <TabsList>

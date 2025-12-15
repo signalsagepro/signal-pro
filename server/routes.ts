@@ -1262,6 +1262,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Toggle live data mode for market data generator
+  app.post("/api/market-data/toggle-live", async (req, res) => {
+    try {
+      if (!req.session?.userId) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
+
+      const user = await storage.getUser(req.session.userId);
+      if (!user || user.role !== "admin") {
+        res.status(403).json({ error: "Admin access required" });
+        return;
+      }
+
+      const { enabled } = req.body;
+      marketDataGenerator.setUseLiveData(enabled);
+
+      res.json({ 
+        success: true, 
+        mode: enabled ? "live" : "simulated",
+        message: enabled 
+          ? "Now using live data from Zerodha for signal generation" 
+          : "Now using simulated data for signal generation"
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to toggle live data mode" });
+    }
+  });
+
+  // Get current market data mode
+  app.get("/api/market-data/mode", async (req, res) => {
+    try {
+      if (!req.session?.userId) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
+
+      // Check if Zerodha is connected
+      const configs = await storage.getBrokerConfigs();
+      const zerodhaConnected = configs.some(c => c.name === "zerodha" && c.connected);
+
+      res.json({ 
+        mode: "simulated", // Default, will be updated by toggle
+        zerodhaConnected,
+        canUseLiveData: zerodhaConnected
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to get market data mode" });
+    }
+  });
+
   marketDataGenerator.setBroadcastCallback(broadcastSignal);
 
   return httpServer;

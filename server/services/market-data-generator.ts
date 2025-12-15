@@ -1,6 +1,7 @@
 import { storage } from "../storage";
 import { emaCalculator } from "./ema-calculator";
 import { signalDetector, type MarketData } from "./signal-detector";
+import { brokerService } from "./broker-service";
 
 export interface SignalBroadcastCallback {
   (signal: any): void;
@@ -10,9 +11,15 @@ export class MarketDataGenerator {
   private intervalId: NodeJS.Timeout | null = null;
   private candleHistory: Map<string, Array<{ price: number; high: number; low: number; open: number }>> = new Map();
   private broadcastCallback: SignalBroadcastCallback | null = null;
+  private useLiveData: boolean = false;
 
   setBroadcastCallback(callback: SignalBroadcastCallback) {
     this.broadcastCallback = callback;
+  }
+
+  setUseLiveData(enabled: boolean) {
+    this.useLiveData = enabled;
+    console.log(`Market data mode: ${enabled ? 'LIVE from Zerodha' : 'SIMULATED'}`);
   }
 
   start() {
@@ -58,7 +65,17 @@ export class MarketDataGenerator {
 
     const history = this.candleHistory.get(historyKey)!;
     
-    const newCandle = this.generateNewCandle(history[history.length - 1]?.price || 100);
+    // Try to fetch live data if enabled
+    let newCandle;
+    if (this.useLiveData) {
+      newCandle = await this.fetchLiveCandle(assetId);
+    }
+    
+    // Fallback to simulated data if live fetch fails or is disabled
+    if (!newCandle) {
+      newCandle = this.generateNewCandle(history[history.length - 1]?.price || 100);
+    }
+    
     history.push(newCandle);
 
     if (history.length > 250) {
@@ -96,6 +113,40 @@ export class MarketDataGenerator {
       if (this.broadcastCallback) {
         this.broadcastCallback(createdSignal);
       }
+    }
+  }
+
+  private async fetchLiveCandle(assetId: string): Promise<{ price: number; high: number; low: number; open: number } | null> {
+    try {
+      const asset = await storage.getAsset(assetId);
+      if (!asset) return null;
+
+      // Get connected Zerodha broker config
+      const configs = await storage.getBrokerConfigs();
+      const zerodhaConfig = configs.find(c => c.name === "zerodha" && c.connected);
+      
+      if (!zerodhaConfig) {
+        console.log("[Live Data] No connected Zerodha broker found");
+        return null;
+      }
+
+      // Fetch live quote from Zerodha
+      const quote = await brokerService.getQuote("zerodha", asset.symbol, asset.exchange || "NSE");
+      
+      if (quote) {
+        console.log(`[Live Data] ${asset.symbol}: ₹${quote.lastPrice}`);
+        return {
+          price: quote.close || quote.lastPrice,
+          high: quote.high,
+          low: quote.low,
+          open: quote.open,
+        };
+      }
+      
+      return null;
+    } catch (error) {
+      console.error("[Live Data] Error fetching live candle:", error);
+      return null;
     }
   }
 
