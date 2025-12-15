@@ -564,6 +564,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Exchange Zerodha request_token for access_token (called from frontend)
+  app.post("/api/broker-configs/zerodha/exchange-token", async (req, res) => {
+    try {
+      const { request_token } = req.body;
+      
+      if (!request_token) {
+        res.status(400).json({ success: false, error: "Missing request_token" });
+        return;
+      }
+
+      // Find the Zerodha broker config
+      const configs = await storage.getBrokerConfigs();
+      const zerodhaConfig = configs.find(c => c.name === "zerodha");
+      
+      if (!zerodhaConfig || !zerodhaConfig.apiKey || !zerodhaConfig.apiSecret) {
+        res.status(400).json({ success: false, error: "Zerodha not configured. Please add API key and secret first." });
+        return;
+      }
+
+      // Exchange request_token for access_token
+      const adapter = new (await import("./services/broker-service")).ZerodhaAdapter();
+      const result = await adapter.exchangeToken(
+        request_token,
+        zerodhaConfig.apiKey,
+        zerodhaConfig.apiSecret
+      );
+
+      if (result.success && result.accessToken) {
+        // Save the access token to broker config
+        await storage.updateBrokerConfig(zerodhaConfig.id, {
+          connected: true,
+          lastConnected: new Date(),
+          metadata: {
+            ...(zerodhaConfig.metadata as Record<string, unknown> || {}),
+            accessToken: result.accessToken,
+            userId: result.userId,
+            tokenDate: new Date().toISOString(),
+          },
+        });
+        
+        res.json({ success: true, message: "Connected to Zerodha successfully" });
+      } else {
+        res.status(400).json({ success: false, error: result.message || "Token exchange failed" });
+      }
+    } catch (error) {
+      console.error("Zerodha token exchange error:", error);
+      res.status(500).json({ success: false, error: "Failed to exchange token" });
+    }
+  });
+
   // Get Zerodha OAuth login URL
   app.get("/api/broker-configs/:id/oauth-url", async (req, res) => {
     try {

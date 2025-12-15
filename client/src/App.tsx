@@ -9,6 +9,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { AppSidebar } from "@/components/app-sidebar";
 import { useAuth } from "@/hooks/use-auth";
+import { useOAuthCallback } from "@/hooks/use-oauth-callback";
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/login";
 import Dashboard from "@/pages/dashboard";
@@ -65,6 +66,7 @@ function AuthGuard() {
 
 function ProtectedLayout() {
   const { user } = useAuth();
+  const { isProcessing: isProcessingOAuth } = useOAuthCallback();
   const [devMode, setDevMode] = useState(false);
   const [superDevMode, setSuperDevMode] = useState(false);
   const [logoClickCount, setLogoClickCount] = useState(0);
