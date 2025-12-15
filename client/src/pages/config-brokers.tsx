@@ -21,10 +21,10 @@ const INDIAN_BROKERS = [
   { id: "angel", name: "Angel One", description: "Angel Broking platform" },
 ];
 
-const FOREX_BROKERS = [
-  { id: "oanda", name: "OANDA", description: "Professional forex trading" },
-  { id: "ib", name: "Interactive Brokers", description: "Global trading platform" },
-  { id: "fxcm", name: "FXCM", description: "Forex capital markets" },
+const FOREX_DATA_PROVIDERS = [
+  { id: "finnhub", name: "Finnhub", description: "FREE forex WebSocket data", type: "finnhub", requiresSecret: false },
+  { id: "twelvedata", name: "TwelveData", description: "2000+ forex pairs ($79/mo for WebSocket)", type: "twelvedata", requiresSecret: false },
+  { id: "tiingo", name: "Tiingo", description: "Real-time forex data ($10/mo)", type: "tiingo", requiresSecret: false },
 ];
 
 interface BrokerCardState {
@@ -237,8 +237,10 @@ function ConfigBrokersContent() {
     }
   };
 
-  const renderBrokerCard = (broker: typeof INDIAN_BROKERS[0] | typeof FOREX_BROKERS[0], type: "indian" | "forex") => {
-    const config = brokerConfigs.find((c) => c.name === broker.id && c.type === type);
+  const renderBrokerCard = (broker: typeof INDIAN_BROKERS[0] | typeof FOREX_DATA_PROVIDERS[0], type: "indian" | "forex") => {
+    // For forex data providers, use the provider's type (e.g., "finnhub") instead of "forex"
+    const brokerType = "type" in broker ? broker.type : type;
+    const config = brokerConfigs.find((c) => c.name === broker.id && c.type === brokerType);
     const stateKey = `${broker.id}-${type}`;
     
     const cardState = cardStates[stateKey] || {
@@ -495,7 +497,7 @@ function ConfigBrokersContent() {
         </TabsContent>
 
         <TabsContent value="forex" className="space-y-4 mt-6">
-          {FOREX_BROKERS.map((broker) => renderBrokerCard(broker, "forex"))}
+          {FOREX_DATA_PROVIDERS.map((broker) => renderBrokerCard(broker, "forex"))}
         </TabsContent>
       </Tabs>
     </div>

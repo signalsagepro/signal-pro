@@ -221,6 +221,24 @@ const PRESET_ASSETS = [
   { symbol: "TY", name: "US 10Y Bond", type: "indian_futures", exchange: "CBOT" },
   { symbol: "FV", name: "US 5Y Bond", type: "indian_futures", exchange: "CBOT" },
   { symbol: "ZN", name: "30Y Bond", type: "indian_futures", exchange: "CBOT" },
+  // Forex - Major Pairs (Finnhub FREE)
+  { symbol: "EUR/USD", name: "Euro / US Dollar", type: "forex", exchange: "FOREX" },
+  { symbol: "GBP/USD", name: "British Pound / US Dollar", type: "forex", exchange: "FOREX" },
+  { symbol: "USD/JPY", name: "US Dollar / Japanese Yen", type: "forex", exchange: "FOREX" },
+  { symbol: "USD/CHF", name: "US Dollar / Swiss Franc", type: "forex", exchange: "FOREX" },
+  { symbol: "AUD/USD", name: "Australian Dollar / US Dollar", type: "forex", exchange: "FOREX" },
+  { symbol: "USD/CAD", name: "US Dollar / Canadian Dollar", type: "forex", exchange: "FOREX" },
+  { symbol: "NZD/USD", name: "New Zealand Dollar / US Dollar", type: "forex", exchange: "FOREX" },
+  // Forex - Cross Pairs
+  { symbol: "EUR/GBP", name: "Euro / British Pound", type: "forex", exchange: "FOREX" },
+  { symbol: "EUR/JPY", name: "Euro / Japanese Yen", type: "forex", exchange: "FOREX" },
+  { symbol: "GBP/JPY", name: "British Pound / Japanese Yen", type: "forex", exchange: "FOREX" },
+  { symbol: "EUR/CHF", name: "Euro / Swiss Franc", type: "forex", exchange: "FOREX" },
+  { symbol: "AUD/JPY", name: "Australian Dollar / Japanese Yen", type: "forex", exchange: "FOREX" },
+  // Forex - INR Pairs
+  { symbol: "USD/INR", name: "US Dollar / Indian Rupee", type: "forex", exchange: "FOREX" },
+  { symbol: "EUR/INR", name: "Euro / Indian Rupee", type: "forex", exchange: "FOREX" },
+  { symbol: "GBP/INR", name: "British Pound / Indian Rupee", type: "forex", exchange: "FOREX" },
 ];
 
 export default function Assets() {
@@ -249,15 +267,27 @@ export default function Assets() {
     queryKey: ["/api/assets"],
   });
 
-  // Fetch live prices every 2 seconds
+  // Fetch live prices every 2 seconds (Indian + Forex)
   useEffect(() => {
     const fetchLivePrices = async () => {
       try {
-        const response = await fetch("/api/realtime/prices", { credentials: "include" });
-        if (response.ok) {
-          const data = await response.json();
-          setLivePrices(data.prices || {});
+        // Fetch Indian market prices
+        const indianResponse = await fetch("/api/realtime/prices", { credentials: "include" });
+        let allPrices: Record<string, any> = {};
+        
+        if (indianResponse.ok) {
+          const indianData = await indianResponse.json();
+          allPrices = { ...allPrices, ...(indianData.prices || {}) };
         }
+
+        // Fetch forex prices
+        const forexResponse = await fetch("/api/forex/prices", { credentials: "include" });
+        if (forexResponse.ok) {
+          const forexData = await forexResponse.json();
+          allPrices = { ...allPrices, ...(forexData.prices || {}) };
+        }
+
+        setLivePrices(allPrices);
       } catch (error) {
         // Silently fail - WebSocket might not be connected
       }
@@ -636,12 +666,15 @@ export default function Assets() {
                           <TableHead className="font-semibold">Name</TableHead>
                           <TableHead className="font-semibold">Type</TableHead>
                           <TableHead className="font-semibold">Exchange</TableHead>
+                          <TableHead className="font-semibold">Live Price</TableHead>
                           <TableHead className="font-semibold">Status</TableHead>
                           <TableHead className="text-right font-semibold">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {forexAssets.map((asset) => (
+                        {forexAssets.map((asset) => {
+                          const livePrice = livePrices[asset.id];
+                          return (
                           <TableRow key={asset.id} data-testid={`asset-row-${asset.id}`} className="border-b border-border/30 hover:bg-muted/50 transition-colors">
                             <TableCell className="font-mono font-bold text-lg text-primary">
                               {asset.symbol}
@@ -654,6 +687,22 @@ export default function Assets() {
                             </TableCell>
                             <TableCell className="text-muted-foreground text-sm font-medium">
                               {asset.exchange || "—"}
+                            </TableCell>
+                            <TableCell>
+                              {livePrice ? (
+                                <div className="space-y-1">
+                                  <div className="font-mono font-bold text-base">
+                                    {livePrice.price?.toFixed(5) || "—"}
+                                  </div>
+                                  {livePrice.change !== undefined && (
+                                    <div className={`text-xs font-medium ${livePrice.change >= 0 ? "text-chart-2" : "text-destructive"}`}>
+                                      {livePrice.change >= 0 ? "+" : ""}{livePrice.changePercent?.toFixed(2) || "0.00"}%
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-muted-foreground text-sm">—</span>
+                              )}
                             </TableCell>
                             <TableCell>
                               <Badge variant={asset.enabled ? "default" : "secondary"} className="text-xs font-semibold">
@@ -676,7 +725,8 @@ export default function Assets() {
                               </Button>
                             </TableCell>
                           </TableRow>
-                        ))}
+                          );
+                        })}
                       </TableBody>
                     </Table>
                   </div>

@@ -5,6 +5,8 @@ import { storage, dbStorage } from "./storage";
 import { z } from "zod";
 import { insertAssetSchema, insertStrategySchema, insertSignalSchema, insertUserSchema, insertLogSchema } from "@shared/schema";
 import { realtimeSignalGenerator } from "./services/realtime-signal-generator";
+import { forexSignalGenerator } from "./services/forex-signal-generator";
+import { finnhubForexWebSocket, FOREX_SYMBOL_MAP, FINNHUB_FOREX_PAIRS } from "./services/finnhub-forex-websocket";
 import { notificationService } from "./services/notification-service";
 import { brokerService } from "./services/broker-service";
 import { brokerWebSocket } from "./services/broker-websocket";
@@ -1414,6 +1416,175 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   realtimeSignalGenerator.setBroadcastCallback(broadcastSignal);
+  forexSignalGenerator.setBroadcastCallback(broadcastSignal);
+
+  // ==================== FOREX ROUTES ====================
+
+  // Start Finnhub Forex WebSocket connection
+  app.post("/api/forex/start", async (req, res) => {
+    try {
+      if (!req.session?.userId) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
+
+      const user = await storage.getUser(req.session.userId);
+      if (!user || user.role !== "admin") {
+        res.status(403).json({ error: "Admin access required" });
+        return;
+      }
+
+      const started = await forexSignalGenerator.start();
+
+      if (started) {
+        res.json({ 
+          success: true, 
+          message: "Forex signal generation started with Finnhub WebSocket"
+        });
+      } else {
+        res.status(400).json({ 
+          success: false, 
+          error: "Failed to start Forex signals. Ensure Finnhub is configured with API key."
+        });
+      }
+    } catch (error) {
+      console.error("Error starting forex signals:", error);
+      res.status(500).json({ error: "Failed to start forex signals" });
+    }
+  });
+
+  // Stop Finnhub Forex WebSocket connection
+  app.post("/api/forex/stop", async (req, res) => {
+    try {
+      if (!req.session?.userId) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
+
+      const user = await storage.getUser(req.session.userId);
+      if (!user || user.role !== "admin") {
+        res.status(403).json({ error: "Admin access required" });
+        return;
+      }
+
+      forexSignalGenerator.stop();
+      res.json({ success: true, message: "Forex signal generation stopped" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to stop forex signals" });
+    }
+  });
+
+  // Get Forex connection status
+  app.get("/api/forex/status", async (req, res) => {
+    try {
+      if (!req.session?.userId) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
+
+      const configs = await storage.getBrokerConfigs();
+      const finnhubConfig = configs.find(c => c.type === "finnhub" && c.enabled);
+      const isConnected = finnhubForexWebSocket.isConnectedStatus();
+
+      res.json({ 
+        finnhubConfigured: !!finnhubConfig,
+        finnhubConnected: isConnected,
+        mode: "forex",
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to get forex status" });
+    }
+  });
+
+  // Get live forex prices
+  app.get("/api/forex/prices", async (req, res) => {
+    try {
+      if (!req.session?.userId) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
+
+      const livePrices = forexSignalGenerator.getLivePrices();
+      const pricesObject: Record<string, any> = {};
+
+      Array.from(livePrices.entries()).forEach(([assetId, data]) => {
+        pricesObject[assetId] = data;
+      });
+
+      res.json({ prices: pricesObject });
+    } catch (error) {
+      console.error("Error fetching forex prices:", error);
+      res.status(500).json({ error: "Failed to fetch forex prices" });
+    }
+  });
+
+  // Get available Finnhub forex pairs
+  app.get("/api/forex/pairs", async (req, res) => {
+    try {
+      if (!req.session?.userId) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
+
+      const pairs = Object.entries(FOREX_SYMBOL_MAP).map(([finnhubSymbol, info]) => ({
+        finnhubSymbol,
+        symbol: info.symbol,
+        name: info.name,
+      }));
+
+      res.json({ pairs });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch forex pairs" });
+    }
+  });
+
+  // Add forex pairs as assets
+  app.post("/api/forex/add-pairs", async (req, res) => {
+    try {
+      if (!req.session?.userId) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
+
+      const user = await storage.getUser(req.session.userId);
+      if (!user || user.role !== "admin") {
+        res.status(403).json({ error: "Admin access required" });
+        return;
+      }
+
+      const { pairs } = req.body;
+      if (!pairs || !Array.isArray(pairs)) {
+        res.status(400).json({ error: "Invalid pairs array" });
+        return;
+      }
+
+      const addedAssets = [];
+      for (const finnhubSymbol of pairs) {
+        const info = FOREX_SYMBOL_MAP[finnhubSymbol];
+        if (info) {
+          // Check if asset already exists
+          const existingAssets = await storage.getAssets();
+          const exists = existingAssets.some(a => a.symbol === info.symbol);
+          
+          if (!exists) {
+            const asset = await storage.createAsset({
+              symbol: info.symbol,
+              name: info.name,
+              type: "forex",
+              exchange: "FOREX",
+              enabled: true,
+            });
+            addedAssets.push(asset);
+          }
+        }
+      }
+
+      res.json({ success: true, addedAssets, count: addedAssets.length });
+    } catch (error) {
+      console.error("Error adding forex pairs:", error);
+      res.status(500).json({ error: "Failed to add forex pairs" });
+    }
+  });
 
   // Auto-connect to Zerodha WebSocket on startup if configured
   // Use setImmediate to ensure all routes are registered first
@@ -1441,6 +1612,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } else {
         console.log("[Startup] ⚠️  Zerodha not configured or not connected");
         console.log("[Startup] Please configure Zerodha in Broker Settings to enable WebSocket");
+      }
+
+      // Check for Finnhub Forex configuration
+      console.log("[Startup] Checking for Finnhub Forex configuration...");
+      const finnhubConfig = configs.find(c => c.type === "finnhub" && c.enabled);
+      
+      if (finnhubConfig && finnhubConfig.apiKey) {
+        console.log("[Startup] ✅ Finnhub is configured");
+        console.log("[Startup] Starting Forex signal generator...");
+        const forexStarted = await forexSignalGenerator.start();
+        
+        if (forexStarted) {
+          console.log("[Startup] ✅ Finnhub Forex WebSocket auto-connected successfully");
+          console.log("[Startup] 🔄 Forex signals are now active");
+        } else {
+          console.log("[Startup] ⚠️  Failed to auto-connect Finnhub Forex WebSocket");
+        }
+      } else {
+        console.log("[Startup] ⚠️  Finnhub not configured or disabled");
+        console.log("[Startup] Configure Finnhub in Broker Settings to enable Forex signals");
       }
     } catch (error) {
       console.error("[Startup] ❌ Error auto-connecting WebSocket:", error);
