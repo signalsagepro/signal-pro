@@ -1,7 +1,28 @@
 import { storage } from "../storage";
 import { signalDetector, type MarketData } from "./signal-detector";
 import { brokerWebSocket } from "./broker-websocket";
+import { emaCalculator } from "./ema-calculator";
 import type { SignalBroadcastCallback } from "./market-data-generator";
+
+/**
+ * Candle data structure for aggregating ticks
+ */
+interface Candle {
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  timestamp: number; // Start of candle period
+}
+
+/**
+ * Candle history for EMA calculation per asset per timeframe
+ */
+interface CandleHistory {
+  candles: Candle[];
+  currentCandle: Candle | null;
+  lastCandleTime: number;
+}
 
 /**
  * Check if Indian stock market is currently open
@@ -56,6 +77,15 @@ export class RealtimeSignalGenerator {
   private assetTokenMap: Map<string, { symbol: string; assetId: string; exchange: string }> = new Map();
   private tokenToAssetMap: Map<number, string> = new Map(); // instrumentToken -> assetId
   private isInitialized = false;
+  
+  // Candle history for proper EMA calculation: key = "assetId-timeframe" (e.g., "asset1-5m")
+  private candleHistories: Map<string, CandleHistory> = new Map();
+  
+  // Timeframe intervals in milliseconds
+  private readonly TIMEFRAMES = {
+    "5m": 5 * 60 * 1000,   // 5 minutes
+    "15m": 15 * 60 * 1000, // 15 minutes
+  };
 
   setBroadcastCallback(callback: SignalBroadcastCallback) {
     this.broadcastCallback = callback;
@@ -187,79 +217,170 @@ export class RealtimeSignalGenerator {
   }
 
   /**
+   * Get the start timestamp for a candle period
+   */
+  private getCandlePeriodStart(timestamp: number, intervalMs: number): number {
+    return Math.floor(timestamp / intervalMs) * intervalMs;
+  }
+
+  /**
+   * Initialize or get candle history for an asset/timeframe combination
+   */
+  private getCandleHistory(assetId: string, timeframe: string): CandleHistory {
+    const key = `${assetId}-${timeframe}`;
+    if (!this.candleHistories.has(key)) {
+      this.candleHistories.set(key, {
+        candles: [],
+        currentCandle: null,
+        lastCandleTime: 0,
+      });
+    }
+    return this.candleHistories.get(key)!;
+  }
+
+  /**
+   * Update candle with new tick data
+   * Returns true if a candle just closed (time to check signals)
+   */
+  private updateCandle(
+    assetId: string,
+    timeframe: string,
+    price: number,
+    high: number,
+    low: number,
+    timestamp: number
+  ): { candleClosed: boolean; closedCandle: Candle | null } {
+    const intervalMs = this.TIMEFRAMES[timeframe as keyof typeof this.TIMEFRAMES];
+    const history = this.getCandleHistory(assetId, timeframe);
+    const periodStart = this.getCandlePeriodStart(timestamp, intervalMs);
+
+    let candleClosed = false;
+    let closedCandle: Candle | null = null;
+
+    // Check if we're in a new candle period
+    if (history.currentCandle && periodStart > history.lastCandleTime) {
+      // Close the current candle and add to history
+      closedCandle = { ...history.currentCandle };
+      history.candles.push(closedCandle);
+      
+      // Keep only last 250 candles for EMA calculation
+      if (history.candles.length > 250) {
+        history.candles.shift();
+      }
+      
+      candleClosed = true;
+      history.currentCandle = null;
+    }
+
+    // Create or update current candle
+    if (!history.currentCandle) {
+      history.currentCandle = {
+        open: price,
+        high: high,
+        low: low,
+        close: price,
+        timestamp: periodStart,
+      };
+      history.lastCandleTime = periodStart;
+    } else {
+      // Update current candle with tick data
+      history.currentCandle.high = Math.max(history.currentCandle.high, high);
+      history.currentCandle.low = Math.min(history.currentCandle.low, low);
+      history.currentCandle.close = price; // Latest price is the close
+    }
+
+    return { candleClosed, closedCandle };
+  }
+
+  /**
+   * Calculate EMA from candle history
+   * Returns { ema50, ema200 } or nulls if insufficient data
+   */
+  private calculateEMAFromCandles(assetId: string, timeframe: string): { ema50: number | null; ema200: number | null } {
+    const history = this.getCandleHistory(assetId, timeframe);
+    
+    if (history.candles.length < 50) {
+      return { ema50: null, ema200: null };
+    }
+
+    const closePrices = history.candles.map(c => c.close);
+    return emaCalculator.calculateEMA50And200(closePrices);
+  }
+
+  /**
    * Process incoming tick data and generate signals
+   * Now properly aggregates ticks into candles and calculates EMA on candle close prices
    */
   private async processTickData(tickData: any) {
     try {
       // Check if market is open before generating signals
       if (!isMarketOpen()) {
-        // Market is closed - don't generate signals
         return;
       }
 
       // Map instrument token to asset
       const assetInfo = this.assetTokenMap.get(tickData.symbol);
       if (!assetInfo) {
-        // Unknown instrument - skip
         return;
       }
 
-      // Only process if we have enough EMA data
-      if (!tickData.ema50 || !tickData.ema200) {
-        return;
-      }
+      const timestamp = Date.now();
+      const price = tickData.lastPrice;
+      const high = tickData.high || price;
+      const low = tickData.low || price;
 
-      console.log(`[Realtime Signals] ${assetInfo.symbol}: ₹${tickData.lastPrice} (EMA50: ${tickData.ema50?.toFixed(2)}, EMA200: ${tickData.ema200?.toFixed(2)})`);
+      // Process for each timeframe
+      for (const timeframe of ["5m", "15m"]) {
+        const { candleClosed, closedCandle } = this.updateCandle(
+          assetInfo.assetId,
+          timeframe,
+          price,
+          high,
+          low,
+          timestamp
+        );
 
-      // Create market data for signal detection - try both 5m and 15m timeframes
-      const marketData5m: MarketData = {
-        assetId: assetInfo.assetId,
-        timeframe: "5m",
-        price: tickData.lastPrice,
-        high: tickData.high,
-        low: tickData.low,
-        open: tickData.open,
-        ema50: tickData.ema50,
-        ema200: tickData.ema200,
-      };
+        // Only check for signals when a candle closes (proper EMA calculation)
+        if (candleClosed && closedCandle) {
+          const { ema50, ema200 } = this.calculateEMAFromCandles(assetInfo.assetId, timeframe);
 
-      const marketData15m: MarketData = {
-        assetId: assetInfo.assetId,
-        timeframe: "15m",
-        price: tickData.lastPrice,
-        high: tickData.high,
-        low: tickData.low,
-        open: tickData.open,
-        ema50: tickData.ema50,
-        ema200: tickData.ema200,
-      };
+          if (ema50 === null || ema200 === null) {
+            console.log(`[Realtime Signals] ${assetInfo.symbol} ${timeframe}: Insufficient data for EMA (need 200 candles, have ${this.getCandleHistory(assetInfo.assetId, timeframe).candles.length})`);
+            continue;
+          }
 
-      // Detect signals for both timeframes
-      const signals5m = await signalDetector.detectSignals(marketData5m);
-      const signals15m = await signalDetector.detectSignals(marketData15m);
-      const signals = [...signals5m, ...signals15m];
+          console.log(`[Realtime Signals] ${assetInfo.symbol} ${timeframe} candle closed: ₹${closedCandle.close.toFixed(2)} (EMA50: ${ema50.toFixed(2)}, EMA200: ${ema200.toFixed(2)})`);
 
-      // Debug logging
-      if (signals.length === 0) {
-        console.log(`[Realtime Signals] No signals detected for ${assetInfo.symbol} - Price: ₹${tickData.lastPrice}, EMA50: ${tickData.ema50?.toFixed(2)}, EMA200: ${tickData.ema200?.toFixed(2)}`);
-      }
+          const marketData: MarketData = {
+            assetId: assetInfo.assetId,
+            timeframe,
+            price: closedCandle.close,
+            high: closedCandle.high,
+            low: closedCandle.low,
+            open: closedCandle.open,
+            ema50,
+            ema200,
+          };
 
-      // Broadcast signals
-      for (const signal of signals) {
-        const createdSignal = await storage.createSignal(signal);
-        console.log(`[Realtime Signals] 🚨 Signal: ${signal.type} for ${assetInfo.symbol} at ₹${tickData.lastPrice}`);
-        
-        if (this.broadcastCallback) {
-          this.broadcastCallback(createdSignal);
-        }
+          const signals = await signalDetector.detectSignals(marketData);
 
-        // Send notifications
-        const asset = await storage.getAsset(assetInfo.assetId);
-        const strategy = await storage.getStrategy(signal.strategyId);
-        if (asset && strategy) {
-          const configs = await storage.getNotificationConfigs();
-          const { notificationService } = await import("./notification-service");
-          notificationService.sendToAllEnabled({ signal: createdSignal, asset, strategy }, configs);
+          for (const signal of signals) {
+            const createdSignal = await storage.createSignal(signal);
+            console.log(`[Realtime Signals] 🚨 Signal: ${signal.type} for ${assetInfo.symbol} at ₹${closedCandle.close.toFixed(2)}`);
+
+            if (this.broadcastCallback) {
+              this.broadcastCallback(createdSignal);
+            }
+
+            // Send notifications
+            const asset = await storage.getAsset(assetInfo.assetId);
+            const strategy = await storage.getStrategy(signal.strategyId);
+            if (asset && strategy) {
+              const configs = await storage.getNotificationConfigs();
+              const { notificationService } = await import("./notification-service");
+              notificationService.sendToAllEnabled({ signal: createdSignal, asset, strategy }, configs);
+            }
+          }
         }
       }
     } catch (error) {
