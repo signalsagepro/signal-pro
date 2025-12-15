@@ -510,6 +510,87 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // OAuth callback for Zerodha Kite - handles redirect after user login
+  app.get("/api/broker-configs/zerodha/callback", async (req, res) => {
+    try {
+      const { request_token, status } = req.query;
+      
+      if (status === "cancelled") {
+        res.redirect("/?broker_error=cancelled");
+        return;
+      }
+
+      if (!request_token || typeof request_token !== "string") {
+        res.redirect("/?broker_error=missing_token");
+        return;
+      }
+
+      // Find the Zerodha broker config (name is "zerodha", type is "indian")
+      const configs = await storage.getBrokerConfigs();
+      const zerodhaConfig = configs.find(c => c.name === "zerodha");
+      
+      if (!zerodhaConfig || !zerodhaConfig.apiKey || !zerodhaConfig.apiSecret) {
+        res.redirect("/?broker_error=config_missing");
+        return;
+      }
+
+      // Exchange request_token for access_token
+      const adapter = new (await import("./services/broker-service")).ZerodhaAdapter();
+      const result = await adapter.exchangeToken(
+        request_token,
+        zerodhaConfig.apiKey,
+        zerodhaConfig.apiSecret
+      );
+
+      if (result.success && result.accessToken) {
+        // Save the access token to broker config
+        await storage.updateBrokerConfig(zerodhaConfig.id, {
+          connected: true,
+          lastConnected: new Date(),
+          metadata: {
+            ...(zerodhaConfig.metadata as Record<string, unknown> || {}),
+            accessToken: result.accessToken,
+            userId: result.userId,
+          },
+        });
+        
+        res.redirect("/settings?broker_connected=zerodha");
+      } else {
+        res.redirect(`/settings?broker_error=${encodeURIComponent(result.message || "token_exchange_failed")}`);
+      }
+    } catch (error) {
+      console.error("Zerodha OAuth callback error:", error);
+      res.redirect("/settings?broker_error=callback_failed");
+    }
+  });
+
+  // Get Zerodha OAuth login URL
+  app.get("/api/broker-configs/:id/oauth-url", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const config = await storage.getBrokerConfig(id);
+      
+      if (!config) {
+        res.status(404).json({ error: "Broker config not found" });
+        return;
+      }
+
+      if (!config.apiKey) {
+        res.status(400).json({ error: "API key is required" });
+        return;
+      }
+
+      if (config.type === "zerodha") {
+        const oauthUrl = `https://kite.zerodha.com/connect/login?v=3&api_key=${config.apiKey}`;
+        res.json({ url: oauthUrl });
+      } else {
+        res.status(400).json({ error: "OAuth not supported for this broker" });
+      }
+    } catch (error) {
+      res.status(500).json({ error: "Failed to generate OAuth URL" });
+    }
+  });
+
   app.get("/api/notification-configs", async (req, res) => {
     try {
       const configs = await storage.getNotificationConfigs();

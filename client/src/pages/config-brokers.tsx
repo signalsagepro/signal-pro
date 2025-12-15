@@ -84,6 +84,22 @@ function ConfigBrokersContent() {
       setTestingConnection(null);
     },
     onError: (error: any, id) => {
+      // Check if this is an OAuth flow requirement
+      const errorMsg = error.message || "";
+      if (errorMsg.includes("OAuth login flow") || errorMsg.includes("kite.zerodha.com")) {
+        // Extract OAuth URL from error message
+        const urlMatch = errorMsg.match(/https:\/\/kite\.zerodha\.com[^\s"]*/);
+        if (urlMatch) {
+          toast({
+            title: "OAuth Login Required",
+            description: "Opening Zerodha login page. Complete login to connect.",
+          });
+          // Open Zerodha login in new window
+          window.open(urlMatch[0], "_blank", "width=600,height=700");
+          setTestingConnection(null);
+          return;
+        }
+      }
       toast({
         title: "Connection failed",
         description: error.message || "Failed to connect to broker API.",
@@ -97,7 +113,34 @@ function ConfigBrokersContent() {
     saveMutation.mutate({ id: configId, data });
   };
 
-  const handleTestConnection = (configId: string) => {
+  const handleTestConnection = async (configId: string) => {
+    const config = brokerConfigs.find(c => c.id === configId);
+    
+    // For Zerodha, check if we need OAuth flow (name is "zerodha", type is "indian")
+    if (config?.name === "zerodha") {
+      // Check if already connected with access token
+      const metadata = config.metadata as Record<string, unknown> | null;
+      if (!metadata?.accessToken) {
+        // Need OAuth flow - get the OAuth URL and redirect
+        try {
+          setTestingConnection(configId);
+          const response = await fetch(`/api/broker-configs/${configId}/oauth-url`);
+          if (response.ok) {
+            const data = await response.json();
+            toast({
+              title: "OAuth Login Required",
+              description: "Opening Zerodha login page. Complete login to connect.",
+            });
+            window.open(data.url, "_blank", "width=600,height=700");
+            setTestingConnection(null);
+            return;
+          }
+        } catch (error) {
+          console.error("Failed to get OAuth URL:", error);
+        }
+      }
+    }
+    
     setTestingConnection(configId);
     testConnectionMutation.mutate(configId);
   };

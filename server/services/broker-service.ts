@@ -124,6 +124,54 @@ export class ZerodhaAdapter implements IBrokerAdapter {
     }
   }
 
+  /**
+   * Exchange request_token from OAuth callback for access_token
+   */
+  async exchangeToken(requestToken: string, apiKey: string, apiSecret: string): Promise<BrokerConnectionResult> {
+    try {
+      // Generate checksum: SHA256(api_key + request_token + api_secret)
+      const crypto = await import("crypto");
+      const checksum = crypto
+        .createHash("sha256")
+        .update(apiKey + requestToken + apiSecret)
+        .digest("hex");
+
+      const response = await fetch(`${this.baseUrl}/session/token`, {
+        method: "POST",
+        headers: {
+          "X-Kite-Version": "3",
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: new URLSearchParams({
+          api_key: apiKey,
+          request_token: requestToken,
+          checksum: checksum,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        return {
+          success: true,
+          message: "Successfully authenticated with Zerodha",
+          accessToken: data.data?.access_token,
+          userId: data.data?.user_id,
+        };
+      } else {
+        const error = await response.json();
+        return {
+          success: false,
+          message: error.message || "Failed to exchange token",
+        };
+      }
+    } catch (error) {
+      return {
+        success: false,
+        message: `Token exchange error: ${error instanceof Error ? error.message : "Unknown error"}`,
+      };
+    }
+  }
+
   async disconnect(): Promise<boolean> {
     try {
       const response = await fetch(`${this.baseUrl}/session/token`, {
