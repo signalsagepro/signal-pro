@@ -10,10 +10,19 @@ import type { SignalBroadcastCallback } from "./market-data-generator";
 export class RealtimeSignalGenerator {
   private broadcastCallback: SignalBroadcastCallback | null = null;
   private assetTokenMap: Map<string, { symbol: string; assetId: string; exchange: string }> = new Map();
+  private tokenToAssetMap: Map<number, string> = new Map(); // instrumentToken -> assetId
   private isInitialized = false;
 
   setBroadcastCallback(callback: SignalBroadcastCallback) {
     this.broadcastCallback = callback;
+  }
+
+  getAssetTokenMap() {
+    return this.assetTokenMap;
+  }
+
+  getTokenToAssetMap() {
+    return this.tokenToAssetMap;
   }
 
   async initialize() {
@@ -107,6 +116,7 @@ export class RealtimeSignalGenerator {
           assetId: asset.id,
           exchange: asset.exchange || "NSE",
         });
+        this.tokenToAssetMap.set(token, asset.id);
       }
     }
 

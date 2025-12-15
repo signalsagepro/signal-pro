@@ -32,6 +32,7 @@ export class BrokerWebSocketManager extends EventEmitter {
   private subscriptions: Map<string, Set<number>> = new Map();
   private reconnectAttempts: Map<string, number> = new Map();
   private priceHistory: Map<string, number[]> = new Map();
+  private latestTicks: Map<string, TickData> = new Map();
   
   private readonly MAX_RECONNECT_ATTEMPTS = 5;
   private readonly RECONNECT_DELAY = 5000;
@@ -354,6 +355,9 @@ export class BrokerWebSocketManager extends EventEmitter {
   private processTick(broker: string, tick: TickData) {
     const key = `${broker}:${tick.symbol}`;
     
+    // Store latest tick for live price display
+    this.latestTicks.set(key, tick);
+    
     // Store price history for EMA calculation
     if (!this.priceHistory.has(key)) {
       this.priceHistory.set(key, []);
@@ -580,6 +584,21 @@ export class BrokerWebSocketManager extends EventEmitter {
       status[broker] = ws.readyState === WebSocket.OPEN;
     }
     return status;
+  }
+
+  /**
+   * Get latest tick data for an instrument
+   */
+  getLatestTick(broker: string, symbol: string): TickData | null {
+    const key = `${broker}:${symbol}`;
+    return this.latestTicks.get(key) || null;
+  }
+
+  /**
+   * Get all latest ticks
+   */
+  getAllLatestTicks(): Map<string, TickData> {
+    return this.latestTicks;
   }
 }
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -231,6 +231,7 @@ export default function Assets() {
   const [assetSearchQuery, setAssetSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<typeof PRESET_ASSETS>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [livePrices, setLivePrices] = useState<Record<string, any>>({});
   const { toast } = useToast();
 
   const form = useForm<AssetFormData>({
@@ -247,6 +248,26 @@ export default function Assets() {
   const { data: assets = [], isLoading } = useQuery<Asset[]>({
     queryKey: ["/api/assets"],
   });
+
+  // Fetch live prices every 2 seconds
+  useEffect(() => {
+    const fetchLivePrices = async () => {
+      try {
+        const response = await fetch("/api/realtime/prices", { credentials: "include" });
+        if (response.ok) {
+          const data = await response.json();
+          setLivePrices(data.prices || {});
+        }
+      } catch (error) {
+        // Silently fail - WebSocket might not be connected
+      }
+    };
+
+    fetchLivePrices();
+    const interval = setInterval(fetchLivePrices, 2000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   const createMutation = useMutation({
     mutationFn: (data: InsertAsset) => apiRequest("POST", "/api/assets", data),
@@ -523,6 +544,7 @@ export default function Assets() {
                         <TableRow className="border-b border-border/50">
                           <TableHead className="font-semibold">Symbol</TableHead>
                           <TableHead className="font-semibold">Name</TableHead>
+                          <TableHead className="font-semibold">Live Price</TableHead>
                           <TableHead className="font-semibold">Type</TableHead>
                           <TableHead className="font-semibold">Exchange</TableHead>
                           <TableHead className="font-semibold">Status</TableHead>
@@ -530,12 +552,26 @@ export default function Assets() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {indianMarketAssets.map((asset) => (
+                        {indianMarketAssets.map((asset) => {
+                          const livePrice = livePrices[asset.id];
+                          return (
                           <TableRow key={asset.id} data-testid={`asset-row-${asset.id}`} className="border-b border-border/30 hover:bg-muted/50 transition-colors">
                             <TableCell className="font-mono font-bold text-lg text-primary">
                               {asset.symbol}
                             </TableCell>
                             <TableCell className="font-semibold text-foreground">{asset.name}</TableCell>
+                            <TableCell>
+                              {livePrice ? (
+                                <div className="flex flex-col">
+                                  <span className="font-bold text-lg text-emerald-600">₹{livePrice.lastPrice.toFixed(2)}</span>
+                                  <span className="text-xs text-muted-foreground">
+                                    {livePrice.changePercent > 0 ? '+' : ''}{livePrice.changePercent.toFixed(2)}%
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className="text-sm text-muted-foreground">—</span>
+                              )}
+                            </TableCell>
                             <TableCell>
                               <Badge className="text-xs font-semibold bg-chart-2 text-white">
                                 {asset.type === "indian_stock" ? "Stock" : "Futures"}
@@ -565,7 +601,8 @@ export default function Assets() {
                               </Button>
                             </TableCell>
                           </TableRow>
-                        ))}
+                          );
+                        })}
                       </TableBody>
                     </Table>
                   </div>

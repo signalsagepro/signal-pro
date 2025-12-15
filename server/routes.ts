@@ -1342,6 +1342,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get live prices for all assets
+  app.get("/api/realtime/prices", async (req, res) => {
+    try {
+      if (!req.session?.userId) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+      }
+
+      const assets = await storage.getAssets();
+      const assetTokenMap = realtimeSignalGenerator.getAssetTokenMap();
+      const allTicks = brokerWebSocket.getAllLatestTicks();
+      
+      const livePrices: Record<string, any> = {};
+
+      // Map ticks to assets
+      const tickEntries = Array.from(allTicks.entries());
+      for (const [key, tick] of tickEntries) {
+        const assetInfo = assetTokenMap.get(tick.symbol);
+        if (assetInfo) {
+          livePrices[assetInfo.assetId] = {
+            symbol: assetInfo.symbol,
+            lastPrice: tick.lastPrice,
+            open: tick.open,
+            high: tick.high,
+            low: tick.low,
+            change: tick.change,
+            changePercent: tick.changePercent,
+            timestamp: tick.timestamp,
+          };
+        }
+      }
+
+      res.json({ prices: livePrices });
+    } catch (error) {
+      console.error("Error fetching live prices:", error);
+      res.status(500).json({ error: "Failed to fetch live prices" });
+    }
+  });
+
   realtimeSignalGenerator.setBroadcastCallback(broadcastSignal);
 
   return httpServer;
