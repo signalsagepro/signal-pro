@@ -36,8 +36,8 @@ export interface DashboardConfig {
 const DEFAULT_CONFIG: DashboardConfig = {
   // Dashboard components
   showMetricCards: true,
-  showNiftyChart: true,
-  showSensexChart: true,
+  showNiftyChart: false,  // Disabled by default - enable via API
+  showSensexChart: false, // Disabled by default - enable via API
   showRecentSignals: true,
   showActiveStrategies: true,
   showConnectedAssets: true,
@@ -54,7 +54,7 @@ const DEFAULT_CONFIG: DashboardConfig = {
   showStrategiesSection: true,
   showAssetsSection: true,
   showSignalsSection: true,
-  showChartsSection: true,
+  showChartsSection: false, // Disabled by default - enable via API
   
   // Admin-only sidebar
   adminOnlyStrategiesSection: false,

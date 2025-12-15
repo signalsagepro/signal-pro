@@ -17,8 +17,10 @@ import {
   LineChart,
   ArrowUpRight,
   ArrowDownRight,
+  Lock,
 } from "lucide-react";
 import { TradingChart } from "@/components/trading-chart";
+import { useDashboardConfig } from "@/hooks/use-dashboard-config";
 
 // NSE F&O Stocks (Top stocks available for Futures & Options trading)
 const STOCKS = [
@@ -126,6 +128,7 @@ export default function Charts() {
   const [selectedStocks, setSelectedStocks] = useState<string[]>(["RELIANCE", "TCS"]);
   const [isLive, setIsLive] = useState(true);
   const [selectedTool, setSelectedTool] = useState("select");
+  const { config, isLoaded } = useDashboardConfig();
   
   const addStock = (symbol: string) => {
     if (!selectedStocks.includes(symbol)) {
@@ -136,6 +139,30 @@ export default function Charts() {
   const removeStock = (symbol: string) => {
     setSelectedStocks(prev => prev.filter(s => s !== symbol));
   };
+
+  // Check if charts are enabled via API config
+  if (isLoaded && !config.showChartsSection) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <Card className="max-w-md w-full">
+          <CardContent className="pt-12 pb-12">
+            <div className="text-center">
+              <div className="mx-auto w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4">
+                <Lock className="h-8 w-8 text-slate-400" />
+              </div>
+              <h3 className="text-xl font-semibold text-slate-800 mb-2">Charts Disabled</h3>
+              <p className="text-slate-500 mb-4">
+                Charts are currently disabled. Please contact your administrator to enable this feature.
+              </p>
+              <Badge variant="secondary" className="text-xs">
+                Feature requires API enablement
+              </Badge>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
   
   return (
     <div className="space-y-6">
