@@ -491,21 +491,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Use the new broker service for real connection testing
       const result = await brokerService.connectBroker(config);
-
-      await storage.updateBrokerConfig(id, {
-        connected: result.success,
-        lastConnected: result.success ? new Date() : config.lastConnected,
-        metadata: result.accessToken ? { 
-          ...(config.metadata as Record<string, unknown> || {}),
-          accessToken: result.accessToken,
-          userId: result.userId,
-        } : config.metadata,
-      });
+      const existingMetadata = config.metadata as Record<string, unknown> | null;
 
       if (result.success) {
+        await storage.updateBrokerConfig(id, {
+          connected: true,
+          lastConnected: new Date(),
+          metadata: result.accessToken ? { 
+            ...(existingMetadata || {}),
+            accessToken: result.accessToken,
+            userId: result.userId,
+          } : existingMetadata,
+        });
         res.json({ success: true, message: result.message });
       } else {
-        res.status(400).json({ success: false, error: result.message });
+        // Connection failed - if there was an existing token, clear it so user can re-authenticate
+        if (existingMetadata?.accessToken) {
+          await storage.updateBrokerConfig(id, {
+            connected: false,
+            metadata: {
+              ...(existingMetadata || {}),
+              accessToken: null,
+              userId: null,
+              tokenDate: null,
+            },
+          });
+        } else {
+          await storage.updateBrokerConfig(id, { connected: false });
+        }
+        res.status(400).json({ success: false, error: result.message, needsReauth: !!existingMetadata?.accessToken });
       }
     } catch (error) {
       res.status(500).json({ error: "Connection test failed" });
@@ -546,8 +560,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
 
         if (!connectResult.success) {
-          // Token might be expired
-          await storage.updateBrokerConfig(id, { connected: false });
+          // Token is invalid/expired - clear it so user can re-authenticate
+          await storage.updateBrokerConfig(id, { 
+            connected: false,
+            metadata: {
+              ...(metadata as Record<string, unknown> || {}),
+              accessToken: null,
+              userId: null,
+              tokenDate: null,
+            },
+          });
           res.status(400).json({ 
             error: "Connection expired", 
             message: connectResult.message,

@@ -154,6 +154,19 @@ function ConfigBrokersContent() {
           return;
         }
       }
+      
+      // Check if token was invalid and cleared - refresh configs so Connect button works
+      if (error.needsReauth) {
+        queryClient.invalidateQueries({ queryKey: ["/api/broker-configs"] });
+        toast({
+          title: "Token Expired",
+          description: "Please click 'Connect' to re-authenticate with Zerodha.",
+          variant: "destructive",
+        });
+        setTestingConnection(null);
+        return;
+      }
+      
       toast({
         title: "Connection failed",
         description: error.message || "Failed to connect to broker API.",
@@ -213,12 +226,13 @@ function ConfigBrokersContent() {
             : data.message,
         });
       } else if (data.needsReauth) {
+        // Token is invalid/expired - refresh configs and prompt user to reconnect
+        await queryClient.invalidateQueries({ queryKey: ["/api/broker-configs"] });
         toast({
           title: "Token Expired",
-          description: "Please reconnect - Zerodha tokens expire daily at 6 AM.",
+          description: "Please click 'Connect' to re-authenticate with Zerodha.",
           variant: "destructive",
         });
-        queryClient.invalidateQueries({ queryKey: ["/api/broker-configs"] });
       } else {
         toast({
           title: "Verification Failed",

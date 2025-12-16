@@ -1,9 +1,23 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
+interface ApiError extends Error {
+  status?: number;
+  needsReauth?: boolean;
+}
+
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
-    throw new Error(`${res.status}: ${text}`);
+    let errorData: { error?: string; message?: string; needsReauth?: boolean } = {};
+    try {
+      errorData = JSON.parse(text);
+    } catch {
+      // Not JSON, use text as-is
+    }
+    const error: ApiError = new Error(errorData.error || errorData.message || text);
+    error.status = res.status;
+    error.needsReauth = errorData.needsReauth;
+    throw error;
   }
 }
 
