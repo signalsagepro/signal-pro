@@ -593,8 +593,11 @@ export class BrokerWebSocketManager extends EventEmitter {
   getStatus(): Record<string, boolean> {
     const status: Record<string, boolean> = {};
     const entries = Array.from(this.connections.entries());
+    console.log("[BrokerWS] getStatus - connections count:", this.connections.size);
     for (const [broker, ws] of entries) {
-      status[broker] = ws.readyState === WebSocket.OPEN;
+      const isOpen = ws.readyState === WebSocket.OPEN;
+      console.log(`[BrokerWS] getStatus - ${broker}: readyState=${ws.readyState}, OPEN=${WebSocket.OPEN}, isOpen=${isOpen}`);
+      status[broker] = isOpen;
     }
     return status;
   }

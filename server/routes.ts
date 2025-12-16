@@ -1369,6 +1369,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const tickKeys = Array.from(allTicks.keys()).slice(0, 5);
       const tokenMapKeys = Array.from(assetTokenMap.keys()).slice(0, 5);
 
+      console.log("[Realtime Status] WebSocket status:", wsStatus);
+      console.log("[Realtime Status] zerodhaConnected:", zerodhaConnected);
+
       res.json({ 
         zerodhaConnected,
         websocketStatus: wsStatus,

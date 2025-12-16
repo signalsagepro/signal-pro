@@ -70,15 +70,23 @@ function ConfigBrokersContent() {
   // Check real-time status on mount and periodically
   useEffect(() => {
     const checkStatus = () => {
+      console.log("[Config Brokers] Checking status, zerodhaConnected:", zerodhaConnected);
       if (zerodhaConnected) {
         fetch("/api/realtime/status", { credentials: "include" })
           .then(res => res.json())
           .then(data => {
-            console.log("[Config Brokers] WebSocket status data:", data);
-            // Check if zerodha WebSocket is connected (boolean true)
-            setRealtimeActive(data.websocketStatus?.zerodha === true);
+            console.log("[Config Brokers] WebSocket status response:", data);
+            console.log("[Config Brokers] websocketStatus object:", data.websocketStatus);
+            console.log("[Config Brokers] zerodha value:", data.websocketStatus?.zerodha);
+            const isActive = data.websocketStatus?.zerodha === true;
+            console.log("[Config Brokers] Setting realtimeActive to:", isActive);
+            setRealtimeActive(isActive);
           })
-          .catch(console.error);
+          .catch(err => {
+            console.error("[Config Brokers] Error fetching status:", err);
+          });
+      } else {
+        console.log("[Config Brokers] Skipping status check - zerodha not connected in config");
       }
     };
 
