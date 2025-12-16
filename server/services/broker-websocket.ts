@@ -33,9 +33,12 @@ export class BrokerWebSocketManager extends EventEmitter {
   private reconnectAttempts: Map<string, number> = new Map();
   private priceHistory: Map<string, number[]> = new Map();
   private latestTicks: Map<string, TickData> = new Map();
+  private brokerConfigs: Map<string, BrokerWebSocketConfig> = new Map();
+  private healthCheckInterval: NodeJS.Timeout | null = null;
   
-  private readonly MAX_RECONNECT_ATTEMPTS = 5;
+  private readonly MAX_RECONNECT_ATTEMPTS = 10;  // Increased for long-running scenarios
   private readonly RECONNECT_DELAY = 5000;
+  private readonly HEALTH_CHECK_INTERVAL = 60000; // Check every minute
 
   /**
    * Connect to Zerodha Kite WebSocket
@@ -44,6 +47,9 @@ export class BrokerWebSocketManager extends EventEmitter {
   async connectZerodha(config: BrokerWebSocketConfig): Promise<boolean> {
     const wsUrl = `wss://ws.kite.trade?api_key=${config.apiKey}&access_token=${config.accessToken}`;
     console.log("[Zerodha WS] Attempting connection to:", wsUrl.replace(config.accessToken, '***TOKEN***'));
+    
+    // Store config for reconnection
+    this.brokerConfigs.set("zerodha", config);
     
     return new Promise((resolve) => {
       try {
@@ -62,6 +68,7 @@ export class BrokerWebSocketManager extends EventEmitter {
           this.connections.set("zerodha", ws);
           this.reconnectAttempts.set("zerodha", 0);
           this.emit("connected", { broker: "zerodha" });
+          this.startHealthCheck();
           resolve(true);
         });
 
@@ -186,6 +193,9 @@ export class BrokerWebSocketManager extends EventEmitter {
    * Documentation: https://upstox.com/developer/api-documentation/websocket/
    */
   async connectUpstox(config: BrokerWebSocketConfig): Promise<boolean> {
+    // Store config for reconnection
+    this.brokerConfigs.set("upstox", config);
+    
     // First get the authorized WebSocket URL
     try {
       const authResponse = await fetch(
@@ -289,6 +299,9 @@ export class BrokerWebSocketManager extends EventEmitter {
    * Documentation: https://smartapi.angelbroking.com/docs/WebSocket
    */
   async connectAngel(config: BrokerWebSocketConfig): Promise<boolean> {
+    // Store config for reconnection
+    this.brokerConfigs.set("angel", config);
+    
     const wsUrl = `wss://smartapisocket.angelone.in/smart-stream?clientCode=${config.apiKey}&feedToken=${config.accessToken}`;
 
     return new Promise((resolve) => {
@@ -615,6 +628,67 @@ export class BrokerWebSocketManager extends EventEmitter {
    */
   getAllLatestTicks(): Map<string, TickData> {
     return this.latestTicks;
+  }
+
+  /**
+   * Start periodic health check for all broker connections
+   * This ensures connections stay alive and reconnect if dropped
+   */
+  private startHealthCheck() {
+    if (this.healthCheckInterval) {
+      return; // Already running
+    }
+
+    console.log("[BrokerWS] Starting health check (every 60 seconds)");
+    
+    this.healthCheckInterval = setInterval(async () => {
+      const brokers = Array.from(this.brokerConfigs.keys());
+      
+      for (const broker of brokers) {
+        const ws = this.connections.get(broker);
+        const config = this.brokerConfigs.get(broker);
+        
+        if (!config) continue;
+        
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+          console.log(`[BrokerWS] Health check: ${broker} disconnected, attempting reconnect...`);
+          
+          // Reset reconnect attempts for health check reconnection
+          this.reconnectAttempts.set(broker, 0);
+          
+          switch (broker) {
+            case "zerodha":
+              await this.connectZerodha(config);
+              break;
+            case "upstox":
+              await this.connectUpstox(config);
+              break;
+            case "angel":
+              await this.connectAngel(config);
+              break;
+          }
+          
+          // Re-subscribe to instruments after reconnection
+          const subs = this.subscriptions.get(broker);
+          if (subs && subs.size > 0) {
+            this.subscribe(broker, Array.from(subs));
+          }
+        } else {
+          console.log(`[BrokerWS] Health check: ${broker} connected ✓`);
+        }
+      }
+    }, this.HEALTH_CHECK_INTERVAL);
+  }
+
+  /**
+   * Stop health check interval
+   */
+  private stopHealthCheck() {
+    if (this.healthCheckInterval) {
+      clearInterval(this.healthCheckInterval);
+      this.healthCheckInterval = null;
+      console.log("[BrokerWS] Health check stopped");
+    }
   }
 }
 

@@ -452,6 +452,229 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ============ INCOMING WEBHOOK (NO AUTH REQUIRED) ============
+  // This endpoint allows external services to trigger signals and notifications
+  // without requiring user authentication. Useful for TradingView alerts, 
+  // custom scripts, or any external system that needs to send signals.
+  app.post("/api/webhook/signal", async (req, res) => {
+    try {
+      const { 
+        symbol,           // Asset symbol (e.g., "NIFTY50", "EUR/USD")
+        signalType,       // Signal type (e.g., "bullish_crossover", "bearish_crossover")
+        price,            // Current price
+        timeframe = "5m", // Timeframe (default: 5m)
+        strategyName,     // Strategy name to match
+        secret,           // Optional: webhook secret for security
+        ema50,            // Optional: EMA 50 value
+        ema200,           // Optional: EMA 200 value
+        message,          // Optional: Custom message
+      } = req.body;
+
+      // Validate webhook secret if configured
+      const webhookSecret = process.env.WEBHOOK_SECRET;
+      if (webhookSecret && secret !== webhookSecret) {
+        console.log("[Webhook] Invalid or missing webhook secret");
+        res.status(401).json({ error: "Invalid webhook secret" });
+        return;
+      }
+
+      // Validate required fields
+      if (!symbol || !signalType || price === undefined) {
+        res.status(400).json({ 
+          error: "Missing required fields", 
+          required: ["symbol", "signalType", "price"],
+          received: { symbol, signalType, price }
+        });
+        return;
+      }
+
+      console.log(`[Webhook] Received signal: ${symbol} - ${signalType} @ ${price}`);
+
+      // Find matching asset
+      const assets = await storage.getAssets();
+      const asset = assets.find(a => 
+        a.symbol.toLowerCase() === symbol.toLowerCase() ||
+        a.symbol.replace("/", "").toLowerCase() === symbol.replace("/", "").toLowerCase()
+      );
+
+      if (!asset) {
+        console.log(`[Webhook] Asset not found: ${symbol}`);
+        res.status(404).json({ error: `Asset not found: ${symbol}` });
+        return;
+      }
+
+      // Find matching strategy or use first enabled strategy
+      const strategies = await storage.getStrategies();
+      let strategy = strategyName 
+        ? strategies.find(s => s.name.toLowerCase().includes(strategyName.toLowerCase()))
+        : strategies.find(s => s.enabled);
+
+      if (!strategy) {
+        // Create a default webhook strategy if none exists
+        strategy = strategies[0];
+        if (!strategy) {
+          console.log("[Webhook] No strategies configured");
+          res.status(400).json({ error: "No strategies configured" });
+          return;
+        }
+      }
+
+      // Create the signal
+      const signalData = {
+        assetId: asset.id,
+        strategyId: strategy.id,
+        type: signalType,
+        timeframe,
+        price: parseFloat(String(price)),
+        ema50: ema50 ? parseFloat(String(ema50)) : parseFloat(String(price)),
+        ema200: ema200 ? parseFloat(String(ema200)) : parseFloat(String(price)),
+      };
+
+      const createdSignal = await storage.createSignal(signalData);
+      console.log(`[Webhook] Signal created: ${createdSignal.id}`);
+
+      // Broadcast to connected WebSocket clients
+      broadcastSignal({
+        ...createdSignal,
+        asset: { symbol: asset.symbol, name: asset.name },
+        strategy: { name: strategy.name }
+      });
+
+      // Send notifications to all enabled channels (works without user login)
+      const notificationConfigs = await storage.getNotificationConfigs();
+      const enabledConfigs = notificationConfigs.filter(c => c.enabled);
+      
+      console.log(`[Webhook] Sending to ${enabledConfigs.length} notification channels`);
+      
+      const notificationResults = await notificationService.sendToAllEnabled(
+        { signal: createdSignal, asset, strategy },
+        notificationConfigs
+      );
+
+      const successCount = notificationResults.filter(r => r.success).length;
+      const failCount = notificationResults.filter(r => !r.success).length;
+
+      console.log(`[Webhook] Notifications sent: ${successCount} success, ${failCount} failed`);
+
+      res.status(201).json({ 
+        success: true,
+        message: `Signal created and ${successCount} notification(s) sent`,
+        signal: createdSignal,
+        notifications: {
+          sent: successCount,
+          failed: failCount,
+          details: notificationResults.map(r => ({
+            channel: r.channel,
+            success: r.success,
+            message: r.message
+          }))
+        }
+      });
+    } catch (error) {
+      console.error("[Webhook] Error processing webhook:", error);
+      res.status(500).json({ error: "Failed to process webhook" });
+    }
+  });
+
+  // Simple webhook endpoint for quick notifications (no signal creation)
+  app.post("/api/webhook/notify", async (req, res) => {
+    try {
+      const { 
+        title,
+        message,
+        type = "info",  // info, success, warning, error
+        secret,
+      } = req.body;
+
+      // Validate webhook secret if configured
+      const webhookSecret = process.env.WEBHOOK_SECRET;
+      if (webhookSecret && secret !== webhookSecret) {
+        res.status(401).json({ error: "Invalid webhook secret" });
+        return;
+      }
+
+      if (!message) {
+        res.status(400).json({ error: "Message is required" });
+        return;
+      }
+
+      console.log(`[Webhook Notify] ${title || 'Notification'}: ${message}`);
+
+      // Get notification configs and send to all enabled
+      const notificationConfigs = await storage.getNotificationConfigs();
+      const enabledConfigs = notificationConfigs.filter(c => c.enabled);
+      
+      // Create a mock signal/asset/strategy for the notification
+      const mockPayload = {
+        signal: {
+          id: `webhook-${Date.now()}`,
+          type: type,
+          timeframe: "webhook",
+          price: 0,
+          ema50: 0,
+          ema200: 0,
+          createdAt: new Date(),
+          assetId: "webhook",
+          strategyId: "webhook",
+        },
+        asset: {
+          id: "webhook",
+          symbol: title || "WEBHOOK",
+          name: message,
+          type: "webhook",
+          exchange: null,
+          enabled: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        strategy: {
+          id: "webhook",
+          name: "Webhook Alert",
+          type: "webhook",
+          timeframe: "webhook",
+          enabled: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          description: null,
+          formula: null,
+          parameters: null,
+          mergedFrom: null,
+          mergeLogic: null,
+          mergeTimeWindow: null,
+        },
+      };
+
+      let successCount = 0;
+      let failCount = 0;
+
+      for (const config of enabledConfigs) {
+        try {
+          const result = await notificationService.sendNotification(
+            mockPayload as any,
+            config
+          );
+          if (result.success) {
+            successCount++;
+          } else {
+            failCount++;
+          }
+        } catch (err) {
+          failCount++;
+        }
+      }
+
+      res.json({
+        success: true,
+        message: `Notification sent to ${successCount} channel(s)`,
+        sent: successCount,
+        failed: failCount,
+      });
+    } catch (error) {
+      console.error("[Webhook Notify] Error:", error);
+      res.status(500).json({ error: "Failed to send notification" });
+    }
+  });
+
   app.get("/api/broker-configs", async (req, res) => {
     try {
       const configs = await storage.getBrokerConfigs();
