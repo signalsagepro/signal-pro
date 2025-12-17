@@ -8,7 +8,8 @@ import { createServer as createViteServer, createLogger } from "vite";
 
 import viteConfig from "../vite.config";
 import runApp from "./app";
-import { storage, dbStorage } from "./storage";
+import { storage } from "./storage";
+import { initializeDatabase } from "./init-database";
 
 export async function setupVite(app: Express, server: Server) {
   const viteLogger = createLogger();
@@ -18,37 +19,14 @@ export async function setupVite(app: Express, server: Server) {
     allowedHosts: true as const,
   };
 
-  // Initialize database with default data if using database storage
-  async function initializeDatabase() {
-    if (process.env.DATABASE_URL) {
-      try {
-        await dbStorage.initializeDefaultData();
-      } catch (error) {
-        console.error("Failed to initialize database data:", error);
-      }
-    }
-  }
-
-  // Initialize default admin user for testing
-  async function initializeDefaultUser() {
+  // Auto-initialize database with migration if needed
+  if (process.env.DATABASE_URL) {
     try {
-      const existing = await storage.getUserByEmail("admin@test.com");
-      if (!existing) {
-        await storage.createUser({
-          email: "admin@test.com",
-          password: "password123",
-          name: "Admin User",
-          role: "admin",
-        });
-        console.log("Default admin user created: admin@test.com / password123");
-      }
+      await initializeDatabase(process.env.DATABASE_URL);
     } catch (error) {
-      console.error("Failed to create default user:", error);
+      console.error("[Init] Failed to initialize database:", error);
     }
   }
-
-  await initializeDatabase();
-  await initializeDefaultUser();
 
   const vite = await createViteServer({
     ...viteConfig,

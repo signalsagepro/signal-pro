@@ -4,8 +4,18 @@ import { type Server } from "node:http";
 
 import express, { type Express } from "express";
 import runApp from "./app";
+import { initializeDatabase } from "./init-database";
 
 export async function serveStatic(app: Express, _server: Server) {
+  // Auto-initialize database with migration if needed
+  if (process.env.DATABASE_URL) {
+    try {
+      await initializeDatabase(process.env.DATABASE_URL);
+    } catch (error) {
+      console.error("[Init] Failed to initialize database:", error);
+    }
+  }
+
   const distPath = path.resolve(import.meta.dirname, "public");
 
   if (!fs.existsSync(distPath)) {

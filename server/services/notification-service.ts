@@ -568,7 +568,7 @@ ${emoji} *${asset.symbol}* - ${strategy.name}
 📉 *EMA 200:* \`${signal.ema200.toFixed(4)}\`
 
 🏦 *Exchange:* ${asset.exchange || 'N/A'}
-🕐 *Time:* ${new Date(signal.createdAt).toLocaleString()}
+🕐 *Time:* ${new Date(signal.createdAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST
 
 _SignalPro - Professional Trading Signals_
       `.trim();
