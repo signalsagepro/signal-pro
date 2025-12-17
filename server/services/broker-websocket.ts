@@ -144,6 +144,23 @@ export class BrokerWebSocketManager extends EventEmitter {
 
   /**
    * Parse individual Zerodha tick packet
+   * Zerodha binary packet structure (Full mode - 44 bytes for stocks):
+   * Bytes 0-3: Instrument token (int32)
+   * Bytes 4-7: Last traded price (int32, divide by 100)
+   * Bytes 8-11: Last traded quantity (int32)
+   * Bytes 12-15: Average traded price (int32, divide by 100)
+   * Bytes 16-19: Volume traded today (int32)
+   * Bytes 20-23: Total buy quantity (int32)
+   * Bytes 24-27: Total sell quantity (int32)
+   * Bytes 28-31: Open price (int32, divide by 100)
+   * Bytes 32-35: High price (int32, divide by 100)
+   * Bytes 36-39: Low price (int32, divide by 100)
+   * Bytes 40-43: Close price (int32, divide by 100)
+   * Bytes 44-47: Last trade time (Unix timestamp)
+   * Bytes 48-51: OI (int32)
+   * Bytes 52-55: OI day high (int32)
+   * Bytes 56-59: OI day low (int32)
+   * Bytes 60-63: Exchange timestamp (Unix timestamp in seconds)
    */
   private parseZerodhaTick(packet: Buffer): TickData | null {
     if (packet.length < 8) return null;
@@ -152,24 +169,72 @@ export class BrokerWebSocketManager extends EventEmitter {
       const instrumentToken = packet.readInt32BE(0);
       const lastPrice = packet.readInt32BE(4) / 100;
 
-      // Full mode packet (44 bytes for stocks, 32 for indices)
+      // Full mode packet (44+ bytes for stocks/futures)
       if (packet.length >= 44) {
+        // Extract exchange timestamp if available (bytes 60-63 for full mode with depth)
+        // For 44-byte packets, use last trade time at bytes 44-47 if available
+        let exchangeTimestamp: Date;
+        
+        if (packet.length >= 64) {
+          // Full mode with market depth - exchange timestamp at bytes 60-63
+          const unixTimestamp = packet.readUInt32BE(60);
+          exchangeTimestamp = new Date(unixTimestamp * 1000);
+        } else if (packet.length >= 48) {
+          // Full mode - last trade time at bytes 44-47
+          const unixTimestamp = packet.readUInt32BE(44);
+          exchangeTimestamp = new Date(unixTimestamp * 1000);
+        } else {
+          exchangeTimestamp = new Date();
+        }
+
+        // Validate timestamp - if it seems invalid, use current time
+        if (isNaN(exchangeTimestamp.getTime()) || exchangeTimestamp.getFullYear() < 2020) {
+          exchangeTimestamp = new Date();
+        }
+
+        const open = packet.readInt32BE(28) / 100;
+        const high = packet.readInt32BE(32) / 100;
+        const low = packet.readInt32BE(36) / 100;
+        const close = packet.readInt32BE(40) / 100;
+        const volume = packet.readInt32BE(16);
+
         return {
           symbol: `TOKEN_${instrumentToken}`,
           instrumentToken,
           lastPrice,
-          high: packet.readInt32BE(8) / 100,
-          low: packet.readInt32BE(12) / 100,
-          open: packet.readInt32BE(16) / 100,
-          close: packet.readInt32BE(20) / 100,
-          volume: packet.readInt32BE(28),
-          change: 0,
-          changePercent: 0,
-          timestamp: new Date(),
+          high: high > 0 ? high : lastPrice,
+          low: low > 0 ? low : lastPrice,
+          open: open > 0 ? open : lastPrice,
+          close: close > 0 ? close : lastPrice,
+          volume,
+          change: lastPrice - close,
+          changePercent: close > 0 ? ((lastPrice - close) / close) * 100 : 0,
+          timestamp: exchangeTimestamp,
         };
       }
 
-      // LTP mode (8 bytes)
+      // Quote mode (28 bytes) or LTP mode (8 bytes)
+      if (packet.length >= 28) {
+        const open = packet.readInt32BE(16) / 100;
+        const high = packet.readInt32BE(20) / 100;
+        const low = packet.readInt32BE(24) / 100;
+        
+        return {
+          symbol: `TOKEN_${instrumentToken}`,
+          instrumentToken,
+          lastPrice,
+          high: high > 0 ? high : lastPrice,
+          low: low > 0 ? low : lastPrice,
+          open: open > 0 ? open : lastPrice,
+          close: lastPrice,
+          volume: packet.readInt32BE(8),
+          change: 0,
+          changePercent: 0,
+          timestamp: new Date(), // Quote mode doesn't include timestamp
+        };
+      }
+
+      // LTP mode (8 bytes) - minimal data
       return {
         symbol: `TOKEN_${instrumentToken}`,
         instrumentToken,
@@ -181,9 +246,10 @@ export class BrokerWebSocketManager extends EventEmitter {
         volume: 0,
         change: 0,
         changePercent: 0,
-        timestamp: new Date(),
+        timestamp: new Date(), // LTP mode doesn't include timestamp
       };
     } catch (error) {
+      console.error("[Zerodha WS] Error parsing tick packet:", error);
       return null;
     }
   }
@@ -438,11 +504,28 @@ export class BrokerWebSocketManager extends EventEmitter {
     switch (broker) {
       case "zerodha":
         // Zerodha subscription: {"a": "subscribe", "v": [tokens]}
+        // First subscribe to tokens
         subscribeMessage = JSON.stringify({
           a: "subscribe",
           v: instrumentTokens,
         });
-        break;
+        ws.send(subscribeMessage);
+        
+        // Then set mode to "full" for complete tick data with OHLC and timestamps
+        // Modes: "ltp" (8 bytes), "quote" (28 bytes), "full" (44+ bytes with timestamp)
+        const modeMessage = JSON.stringify({
+          a: "mode",
+          v: ["full", instrumentTokens],
+        });
+        ws.send(modeMessage);
+        
+        console.log(`[Zerodha WS] Subscribed to ${instrumentTokens.length} instruments in FULL mode`);
+        
+        if (!this.subscriptions.has(broker)) {
+          this.subscriptions.set(broker, new Set());
+        }
+        instrumentTokens.forEach(t => this.subscriptions.get(broker)!.add(t));
+        return true;
 
       case "upstox":
         // Upstox subscription format
