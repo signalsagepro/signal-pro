@@ -28,7 +28,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Plus, Layers, Search, Trash2, Edit, Check, X, TrendingUp, DollarSign, Loader2 } from "lucide-react";
+import { Plus, Layers, Search, Trash2, Edit, Check, X, TrendingUp, DollarSign, Loader2, RefreshCw } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -342,6 +342,26 @@ export default function Assets() {
     },
   });
 
+  const syncTokensMutation = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/assets/sync-tokens", {}),
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/assets"] });
+      const updated = data.results?.filter((r: any) => r.status === "updated").length || 0;
+      const notFound = data.results?.filter((r: any) => r.status === "not_found").length || 0;
+      toast({
+        title: "Tokens Synced",
+        description: `Updated ${updated} assets. ${notFound > 0 ? `${notFound} not found in Zerodha.` : ""}`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Sync Failed",
+        description: error.message || "Failed to sync instrument tokens",
+        variant: "destructive",
+      });
+    },
+  });
+
   const onSubmit = (data: AssetFormData) => {
     createMutation.mutate(data);
   };
@@ -427,15 +447,31 @@ export default function Assets() {
             Monitor and manage your trading instruments
           </p>
         </div>
-        <Button
-          onClick={() => setIsAddDialogOpen(true)}
-          data-testid="button-add-asset"
-          className="gap-2"
-        >
-          <Plus className="h-4 w-4" />
-          <span className="hidden sm:inline">Add Asset</span>
-          <span className="sm:hidden">Add</span>
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => syncTokensMutation.mutate()}
+            disabled={syncTokensMutation.isPending}
+            className="gap-2"
+          >
+            {syncTokensMutation.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4" />
+            )}
+            <span className="hidden sm:inline">Sync Tokens</span>
+            <span className="sm:hidden">Sync</span>
+          </Button>
+          <Button
+            onClick={() => setIsAddDialogOpen(true)}
+            data-testid="button-add-asset"
+            className="gap-2"
+          >
+            <Plus className="h-4 w-4" />
+            <span className="hidden sm:inline">Add Asset</span>
+            <span className="sm:hidden">Add</span>
+          </Button>
+        </div>
       </div>
 
       {/* Stats Cards */}

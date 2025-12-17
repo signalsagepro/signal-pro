@@ -254,6 +254,74 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Sync instrument tokens from Zerodha
+  app.post("/api/assets/sync-tokens", async (req, res) => {
+    try {
+      console.log("[Sync Tokens] Starting instrument token sync...");
+      
+      // Fetch Zerodha NSE instruments CSV
+      const nseResponse = await fetch("https://api.kite.trade/instruments/NSE");
+      if (!nseResponse.ok) {
+        throw new Error(`Failed to fetch NSE instruments: ${nseResponse.status}`);
+      }
+      const nseCsv = await nseResponse.text();
+      
+      // Parse CSV - format: instrument_token,exchange_token,tradingsymbol,name,...
+      const lines = nseCsv.split("\n");
+      const headers = lines[0].split(",");
+      const tokenIndex = headers.indexOf("instrument_token");
+      const symbolIndex = headers.indexOf("tradingsymbol");
+      const nameIndex = headers.indexOf("name");
+      
+      // Build symbol to token map
+      const symbolTokenMap: Record<string, { token: number; name: string }> = {};
+      for (let i = 1; i < lines.length; i++) {
+        const cols = lines[i].split(",");
+        if (cols.length > Math.max(tokenIndex, symbolIndex, nameIndex)) {
+          const symbol = cols[symbolIndex]?.trim();
+          const token = parseInt(cols[tokenIndex]?.trim(), 10);
+          const name = cols[nameIndex]?.trim().replace(/"/g, "");
+          if (symbol && !isNaN(token)) {
+            symbolTokenMap[symbol] = { token, name };
+          }
+        }
+      }
+      
+      console.log(`[Sync Tokens] Loaded ${Object.keys(symbolTokenMap).length} instruments from Zerodha`);
+      
+      // Get all assets and update their tokens
+      const assets = await storage.getAssets();
+      const results: { symbol: string; status: string; token?: number }[] = [];
+      
+      for (const asset of assets) {
+        const symbolUpper = asset.symbol.toUpperCase();
+        const match = symbolTokenMap[symbolUpper];
+        
+        if (match) {
+          await storage.updateAsset(asset.id, { instrumentToken: match.token });
+          results.push({ symbol: asset.symbol, status: "updated", token: match.token });
+          console.log(`[Sync Tokens] ✅ ${asset.symbol} -> token ${match.token}`);
+        } else {
+          results.push({ symbol: asset.symbol, status: "not_found" });
+          console.log(`[Sync Tokens] ⚠️ ${asset.symbol} - not found in Zerodha instruments`);
+        }
+      }
+      
+      const updated = results.filter(r => r.status === "updated").length;
+      const notFound = results.filter(r => r.status === "not_found").length;
+      
+      res.json({
+        success: true,
+        message: `Synced ${updated} assets, ${notFound} not found`,
+        totalInstruments: Object.keys(symbolTokenMap).length,
+        results,
+      });
+    } catch (error) {
+      console.error("[Sync Tokens] Error:", error);
+      res.status(500).json({ error: "Failed to sync instrument tokens" });
+    }
+  });
+
   app.get("/api/strategies", async (req, res) => {
     try {
       const strategies = await storage.getStrategies();
