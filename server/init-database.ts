@@ -139,7 +139,11 @@ export async function initializeDatabase(databaseUrl: string): Promise<void> {
     const brokerCheck = await client.query("SELECT COUNT(*) FROM broker_configs");
     const hasBrokerConfigs = parseInt(brokerCheck.rows[0].count) > 0;
 
-    if (hasAdmin && hasAssets && hasStrategies && hasBrokerConfigs) {
+    // Check if notification configs exist
+    const notificationCheck = await client.query("SELECT COUNT(*) FROM notification_configs");
+    const hasNotificationConfigs = parseInt(notificationCheck.rows[0].count) > 0;
+
+    if (hasAdmin && hasAssets && hasStrategies && hasBrokerConfigs && hasNotificationConfigs) {
       console.log("[Init] ✅ Database already initialized");
       return;
     }
@@ -214,6 +218,59 @@ export async function initializeDatabase(databaseUrl: string): Promise<void> {
         );
       }
       console.log(`[Init] ✅ Added ${brokers.length} broker configs`);
+    }
+
+    // Seed notification configs if missing
+    if (!hasNotificationConfigs) {
+      console.log("[Init] Seeding notification configs...");
+      const notifications = [
+        { 
+          channel: "telegram", 
+          enabled: false,
+          config: JSON.stringify({
+            botToken: "",
+            chatId: "",
+            parseMode: "HTML"
+          })
+        },
+        { 
+          channel: "email", 
+          enabled: false,
+          config: JSON.stringify({
+            smtpHost: "",
+            smtpPort: 587,
+            smtpUser: "",
+            smtpPassword: "",
+            fromEmail: "",
+            toEmail: ""
+          })
+        },
+        { 
+          channel: "webhook", 
+          enabled: false,
+          config: JSON.stringify({
+            url: "",
+            method: "POST",
+            headers: {}
+          })
+        },
+        { 
+          channel: "discord", 
+          enabled: false,
+          config: JSON.stringify({
+            webhookUrl: ""
+          })
+        },
+      ];
+      
+      for (const notification of notifications) {
+        await client.query(
+          `INSERT INTO notification_configs (channel, enabled, config) 
+           VALUES ($1, $2, $3)`,
+          [notification.channel, notification.enabled, notification.config]
+        );
+      }
+      console.log(`[Init] ✅ Added ${notifications.length} notification configs`);
     }
 
     console.log("[Init] ✅ Database initialization complete!\n");
