@@ -135,7 +135,11 @@ export async function initializeDatabase(databaseUrl: string): Promise<void> {
     const strategyCheck = await client.query("SELECT COUNT(*) FROM strategies");
     const hasStrategies = parseInt(strategyCheck.rows[0].count) > 0;
 
-    if (hasAdmin && hasAssets && hasStrategies) {
+    // Check if broker configs exist
+    const brokerCheck = await client.query("SELECT COUNT(*) FROM broker_configs");
+    const hasBrokerConfigs = parseInt(brokerCheck.rows[0].count) > 0;
+
+    if (hasAdmin && hasAssets && hasStrategies && hasBrokerConfigs) {
       console.log("[Init] ✅ Database already initialized");
       return;
     }
@@ -190,6 +194,26 @@ export async function initializeDatabase(databaseUrl: string): Promise<void> {
         );
       }
       console.log(`[Init] ✅ Added ${initialStrategies.length} strategies`);
+    }
+
+    // Seed broker configs if missing
+    if (!hasBrokerConfigs) {
+      console.log("[Init] Seeding broker configs...");
+      const brokers = [
+        { name: "zerodha", type: "indian" },
+        { name: "upstox", type: "indian" },
+        { name: "angel", type: "indian" },
+        { name: "finnhub", type: "finnhub" },
+      ];
+      
+      for (const broker of brokers) {
+        await client.query(
+          `INSERT INTO broker_configs (name, type, enabled, connected) 
+           VALUES ($1, $2, $3, $4)`,
+          [broker.name, broker.type, false, false]
+        );
+      }
+      console.log(`[Init] ✅ Added ${brokers.length} broker configs`);
     }
 
     console.log("[Init] ✅ Database initialization complete!\n");
