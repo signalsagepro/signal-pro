@@ -1057,7 +1057,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return;
       }
 
-      if (config.type === "zerodha") {
+      if (config.name === "zerodha") {
         const oauthUrl = `https://kite.zerodha.com/connect/login?v=3&api_key=${config.apiKey}`;
         res.json({ url: oauthUrl });
       } else {
