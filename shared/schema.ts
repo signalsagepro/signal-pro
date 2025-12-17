@@ -9,6 +9,7 @@ export const assets = pgTable("assets", {
   name: text("name").notNull(),
   type: text("type").notNull(),
   exchange: text("exchange"),
+  instrumentToken: integer("instrument_token"), // Zerodha/broker instrument token for live data
   enabled: boolean("enabled").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });

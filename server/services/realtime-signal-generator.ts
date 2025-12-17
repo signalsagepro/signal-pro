@@ -133,22 +133,28 @@ export class RealtimeSignalGenerator {
   private async subscribeToAssets(broker: string) {
     try {
       const assets = await storage.getAssets();
-      // Filter to only enabled futures assets
-      const enabledFutures = assets.filter(a => a.enabled && a.type === "indian_futures");
+      // Filter to all enabled Indian assets (stocks and futures)
+      const enabledAssets = assets.filter(a => 
+        a.enabled && (a.type === "indian_futures" || a.type === "indian_stock")
+      );
 
-      if (enabledFutures.length === 0) {
-        console.log("[Realtime Signals] No enabled futures assets to subscribe");
+      if (enabledAssets.length === 0) {
+        console.log("[Realtime Signals] No enabled Indian assets to subscribe");
         return;
       }
 
+      console.log(`[Realtime Signals] Found ${enabledAssets.length} enabled assets to subscribe`);
+
       // For Zerodha, we need instrument tokens
-      const instrumentTokens = this.getInstrumentTokens(enabledFutures);
+      const instrumentTokens = this.getInstrumentTokens(enabledAssets);
 
       if (instrumentTokens.length > 0) {
         const success = brokerWebSocket.subscribe(broker, instrumentTokens);
         if (success) {
-          console.log(`[Realtime Signals] Subscribed to ${instrumentTokens.length} futures instruments on ${broker}`);
+          console.log(`[Realtime Signals] ✅ Subscribed to ${instrumentTokens.length}/${enabledAssets.length} instruments on ${broker}`);
         }
+      } else {
+        console.log("[Realtime Signals] ⚠️ No valid instrument tokens found for any assets");
       }
     } catch (error) {
       console.error("[Realtime Signals] Error subscribing to assets:", error);
@@ -157,49 +163,185 @@ export class RealtimeSignalGenerator {
 
   /**
    * Get instrument tokens for assets
-   * TODO: Fetch from Zerodha instruments API
+   * Priority: 1) Asset's instrumentToken field, 2) Known tokens lookup, 3) Skip
    */
   private getInstrumentTokens(assets: any[]): number[] {
-    // Instrument tokens for Indian futures and indices
-    // Note: These are example tokens - in production, fetch from Zerodha instruments CSV
+    // Comprehensive instrument tokens for Indian markets
+    // These are NSE/BSE equity and index tokens - NOT futures tokens
     const knownTokens: Record<string, number> = {
-      // Index Futures (NSE)
-      "NIFTY50": 256265,      // Nifty 50 Index
-      "BANKNIFTY": 260105,    // Bank Nifty Index
-      "FINNIFTY": 257801,     // Finnifty Index
-      "MIDCPNIFTY": 288009,   // Midcap Nifty Index
-      "NIFTYNXT50": 261897,   // Nifty Next 50
+      // NSE Indices
+      "NIFTY": 256265,
+      "NIFTY50": 256265,
+      "NIFTY 50": 256265,
+      "BANKNIFTY": 260105,
+      "BANK NIFTY": 260105,
+      "FINNIFTY": 257801,
+      "NIFTY FIN SERVICE": 257801,
+      "MIDCPNIFTY": 288009,
+      "NIFTY MIDCAP 50": 288009,
+      "NIFTYNXT50": 270857,
+      "NIFTY NEXT 50": 270857,
+      "SENSEX": 265,
       
-      // Commodity Futures (MCX)
-      "GOLD": 261441,         // Gold Futures
-      "SILVER": 261449,       // Silver Futures
-      "CRUDEOIL": 261633,     // Crude Oil Futures
-      "NATURALGAS": 261641,   // Natural Gas Futures
-      
-      // Stock Futures (NSE) - Popular stocks
-      "RELIANCE": 738561,
-      "TCS": 2953217,
-      "INFY": 408065,
-      "HDFCBANK": 341249,
-      "ICICIBANK": 1270529,
-      "SBIN": 779521,
+      // Nifty 50 Stocks (NSE)
+      "ADANIENT": 6401,
+      "ADANIPORTS": 3861249,
+      "APOLLOHOSP": 40193,
+      "ASIANPAINT": 60417,
+      "AXISBANK": 1510401,
+      "BAJAJ-AUTO": 4267265,
+      "BAJFINANCE": 81153,
+      "BAJAJFINSV": 4268801,
+      "BPCL": 134657,
       "BHARTIARTL": 2714625,
+      "BRITANNIA": 140033,
+      "CIPLA": 177665,
+      "COALINDIA": 5215745,
+      "DIVISLAB": 2800641,
+      "DRREDDY": 225537,
+      "EICHERMOT": 232961,
+      "GRASIM": 315393,
+      "HCLTECH": 1850625,
+      "HDFCBANK": 341249,
+      "HDFCLIFE": 119553,
+      "HEROMOTOCO": 345089,
+      "HINDALCO": 348929,
+      "HINDUNILVR": 356865,
+      "ICICIBANK": 1270529,
       "ITC": 424961,
+      "INDUSINDBK": 1346049,
+      "INFY": 408065,
+      "INFOSYS": 408065,
+      "JSWSTEEL": 3001089,
       "KOTAKBANK": 492033,
       "LT": 2939649,
-      "AXISBANK": 1510401,
-      "HINDUNILVR": 356865,
+      "M&M": 519937,
       "MARUTI": 2815745,
-      "BAJFINANCE": 81153,
-      "ASIANPAINT": 60417,
-      "BAJAJFINSV": 4268801,
+      "NESTLEIND": 4598529,
+      "NTPC": 2977281,
+      "ONGC": 633601,
+      "POWERGRID": 3834113,
+      "RELIANCE": 738561,
+      "SBILIFE": 5582849,
+      "SBIN": 779521,
+      "SUNPHARMA": 857857,
+      "TCS": 2953217,
+      "TATACONSUM": 878593,
+      "TATAMOTORS": 884737,
+      "TATASTEEL": 895745,
+      "TECHM": 3465729,
+      "TITAN": 897537,
+      "ULTRACEMCO": 2952193,
+      "UPL": 2889473,
       "WIPRO": 969473,
+      
+      // Bank Nifty Stocks
+      "AUBANK": 5436929,
+      "BANDHANBNK": 579329,
+      "FEDERALBNK": 261889,
+      "IDFCFIRSTB": 2863105,
+      "PNB": 2730497,
+      
+      // Other Popular Stocks
+      "ADANIGREEN": 912129,
+      "ADANIPOWER": 11536385,
+      "AMBUJACEM": 325121,
+      "AUROPHARMA": 70401,
+      "BAJAJHLDNG": 82945,
+      "BANKBARODA": 1195009,
+      "BEL": 98049,
+      "BERGEPAINT": 103425,
+      "BIOCON": 2911489,
+      "BOSCHLTD": 2181889,
+      "CADILAHC": 2029825,
+      "CHOLAFIN": 175361,
+      "COLPAL": 3876097,
+      "CONCOR": 1215745,
+      "CUMMINSIND": 486657,
+      "DLF": 3771393,
+      "DABUR": 197633,
+      "GAIL": 1207553,
+      "GODREJCP": 2585345,
+      "GODREJPROP": 4576001,
+      "HAVELLS": 2513665,
+      "HDFC": 340481,
+      "HINDZINC": 4323585,
+      "ICICIGI": 5573121,
+      "ICICIPRULI": 4774913,
+      "IDEA": 3677697,
+      "IPCALAB": 418049,
+      "JINDALSTEL": 1723649,
+      "JUBLFOOD": 4632577,
+      "L&TFH": 6386689,
+      "LICHSGFIN": 511233,
+      "LUPIN": 2672641,
+      "MGL": 4488705,
+      "MPHASIS": 4503297,
+      "MRF": 562689,
+      "MUTHOOTFIN": 6054401,
+      "NMDC": 3924993,
+      "OFSS": 2748929,
+      "PAGEIND": 3689729,
+      "PEL": 617473,
+      "PETRONET": 2905857,
+      "PFC": 3405569,
+      "PIDILITIND": 681985,
+      "PIIND": 2402561,
+      "PVR": 3365633,
+      "RAMCOCEM": 523009,
+      "RECLTD": 3930881,
+      "SAIL": 758529,
+      "SHREECEM": 794369,
+      "SIEMENS": 806401,
+      "SRF": 837889,
+      "TATAELXSI": 3465217,
+      "TATAPOWER": 877057,
+      "TORNTPHARM": 900609,
+      "TORNTPOWER": 3529217,
+      "TVSMOTOR": 2170625,
+      "UBL": 4278529,
+      "VEDL": 784129,
+      "VOLTAS": 951809,
+      "ZEEL": 975873,
+      
+      // MCX Commodities (spot)
+      "GOLD": 53505799,
+      "SILVER": 53506055,
+      "CRUDEOIL": 53496327,
+      "NATURALGAS": 53496583,
+      "COPPER": 53505031,
+      "ALUMINIUM": 53504519,
+      "ZINC": 53506311,
+      "LEAD": 53505543,
+      "NICKEL": 53505287,
     };
 
     const tokens: number[] = [];
+    const unmappedAssets: string[] = [];
     
     for (const asset of assets) {
-      const token = knownTokens[asset.symbol];
+      let token: number | undefined;
+      
+      // Priority 1: Use instrumentToken from database if set
+      if (asset.instrumentToken) {
+        token = asset.instrumentToken;
+      } else {
+        // Priority 2: Look up in known tokens (try various symbol formats)
+        const symbolVariants = [
+          asset.symbol,
+          asset.symbol.toUpperCase(),
+          asset.symbol.replace(/\s+/g, ""),
+          asset.symbol.replace(/-/g, ""),
+        ];
+        
+        for (const variant of symbolVariants) {
+          if (knownTokens[variant]) {
+            token = knownTokens[variant];
+            break;
+          }
+        }
+      }
+      
       if (token) {
         tokens.push(token);
         this.assetTokenMap.set(`TOKEN_${token}`, {
@@ -209,8 +351,13 @@ export class RealtimeSignalGenerator {
         });
         this.tokenToAssetMap.set(token, asset.id);
       } else {
-        console.log(`[Realtime Signals] No instrument token found for ${asset.symbol}`);
+        unmappedAssets.push(asset.symbol);
       }
+    }
+    
+    if (unmappedAssets.length > 0) {
+      console.log(`[Realtime Signals] ⚠️ No instrument token for ${unmappedAssets.length} assets: ${unmappedAssets.slice(0, 10).join(", ")}${unmappedAssets.length > 10 ? "..." : ""}`);
+      console.log(`[Realtime Signals] 💡 Set instrumentToken in asset config or add to knownTokens list`);
     }
 
     return tokens;
