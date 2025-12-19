@@ -50,10 +50,24 @@ interface Token {
   position: number;
 }
 
-// Allowed variables
+// Allowed variables (lowercase)
 const ALLOWED_VARIABLES = new Set([
   'price', 'ema50', 'ema200', 'high', 'low', 'open', 'close', 'volume'
 ]);
+
+// Variable name mappings (uppercase with underscores to lowercase)
+const VARIABLE_MAPPINGS: Record<string, string> = {
+  'ema_50': 'ema50',
+  'ema_200': 'ema200',
+  'ema50': 'ema50',
+  'ema200': 'ema200',
+  'price': 'price',
+  'close': 'close',
+  'high': 'high',
+  'low': 'low',
+  'open': 'open',
+  'volume': 'volume',
+};
 
 // Allowed functions
 const ALLOWED_FUNCTIONS = new Set([
@@ -105,11 +119,16 @@ function tokenize(formula: string): Token[] {
         identifier += formula[pos++];
       }
       
+      const lowerIdentifier = identifier.toLowerCase();
+      
       // Check if it's a function (followed by parenthesis)
-      if (ALLOWED_FUNCTIONS.has(identifier.toLowerCase())) {
-        tokens.push({ type: 'FUNCTION', value: identifier.toLowerCase(), position: startPos });
-      } else if (ALLOWED_VARIABLES.has(identifier.toLowerCase())) {
-        tokens.push({ type: 'VARIABLE', value: identifier.toLowerCase(), position: startPos });
+      if (ALLOWED_FUNCTIONS.has(lowerIdentifier)) {
+        tokens.push({ type: 'FUNCTION', value: lowerIdentifier, position: startPos });
+      } else if (VARIABLE_MAPPINGS[lowerIdentifier]) {
+        // Use mapped variable name
+        tokens.push({ type: 'VARIABLE', value: VARIABLE_MAPPINGS[lowerIdentifier], position: startPos });
+      } else if (ALLOWED_VARIABLES.has(lowerIdentifier)) {
+        tokens.push({ type: 'VARIABLE', value: lowerIdentifier, position: startPos });
       } else {
         throw new Error(`Unknown identifier: ${identifier} at position ${startPos}`);
       }

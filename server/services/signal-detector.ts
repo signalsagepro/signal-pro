@@ -108,6 +108,7 @@ export class CustomFormulaStrategy implements ISignalStrategy {
       // Use safe formula evaluator instead of new Function()
       return formulaEvaluator.evaluate(this.formula, {
         price: data.price,
+        close: data.price,
         ema50: data.ema50,
         ema200: data.ema200,
         high: data.high,
