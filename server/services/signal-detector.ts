@@ -155,7 +155,7 @@ export class SignalDetector {
 
       let strategyImpl = this.strategies.get(dbStrategy.type);
 
-      if (dbStrategy.isCustom && dbStrategy.formula) {
+      if (dbStrategy.formula) {
         strategyImpl = new CustomFormulaStrategy(dbStrategy.formula, dbStrategy.type);
       }
 
