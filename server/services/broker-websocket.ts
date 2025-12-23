@@ -79,9 +79,20 @@ export class BrokerWebSocketManager extends EventEmitter {
 
         ws.on("close", (code, reason) => {
           clearTimeout(connectionTimeout);
-          console.log("[Zerodha WS] Disconnected with code:", code, "reason:", reason.toString());
+          const reasonStr = reason.toString();
+          console.log("[Zerodha WS] Disconnected with code:", code, "reason:", reasonStr);
           this.connections.delete("zerodha");
           this.emit("disconnected", { broker: "zerodha" });
+          
+          // Check if disconnection is due to authentication/token issues
+          // Zerodha close codes: 403 = invalid token, 1006 = abnormal closure (often auth)
+          if (code === 403 || (code === 1006 && reasonStr.toLowerCase().includes('auth'))) {
+            console.error("[Zerodha WS] ❌ Token expired or invalid - stopping reconnection");
+            this.emit("token_expired", { broker: "zerodha" });
+            this.brokerConfigs.delete("zerodha");
+            return;
+          }
+          
           this.attemptReconnect("zerodha", config);
         });
 
@@ -89,6 +100,17 @@ export class BrokerWebSocketManager extends EventEmitter {
           clearTimeout(connectionTimeout);
           console.error("[Zerodha WS] ❌ Connection error:", error.message);
           console.error("[Zerodha WS] Error details:", error);
+          
+          // Check if error is related to authentication/token
+          const errorMsg = error.message.toLowerCase();
+          if (errorMsg.includes('401') || errorMsg.includes('403') || 
+              errorMsg.includes('unauthorized') || errorMsg.includes('invalid token') ||
+              errorMsg.includes('token expired')) {
+            console.error("[Zerodha WS] ❌ Authentication failed - token may be expired");
+            this.emit("token_expired", { broker: "zerodha" });
+            this.brokerConfigs.delete("zerodha");
+          }
+          
           this.emit("error", { broker: "zerodha", error: error.message });
           resolve(false);
         });

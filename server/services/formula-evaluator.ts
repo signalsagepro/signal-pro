@@ -121,8 +121,15 @@ function tokenize(formula: string): Token[] {
       
       const lowerIdentifier = identifier.toLowerCase();
       
-      // Check if it's a function (followed by parenthesis)
-      if (ALLOWED_FUNCTIONS.has(lowerIdentifier)) {
+      // Check for SQL-style logical operators
+      if (lowerIdentifier === 'and') {
+        tokens.push({ type: 'LOGICAL', value: '&&', position: startPos });
+      } else if (lowerIdentifier === 'or') {
+        tokens.push({ type: 'LOGICAL', value: '||', position: startPos });
+      } else if (lowerIdentifier === 'not') {
+        tokens.push({ type: 'LOGICAL', value: '!', position: startPos });
+      } else if (ALLOWED_FUNCTIONS.has(lowerIdentifier)) {
+        // Check if it's a function (followed by parenthesis)
         tokens.push({ type: 'FUNCTION', value: lowerIdentifier, position: startPos });
       } else if (VARIABLE_MAPPINGS[lowerIdentifier]) {
         // Use mapped variable name

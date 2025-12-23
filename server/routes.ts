@@ -948,6 +948,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           },
         });
         
+        // Automatically connect WebSocket after successful login
+        console.log("[OAuth Callback] Initializing WebSocket connection...");
+        await realtimeSignalGenerator.initialize();
+        const wsConnected = await realtimeSignalGenerator.connectZerodha();
+        if (wsConnected) {
+          console.log("[OAuth Callback] ✅ WebSocket connected automatically");
+        } else {
+          console.log("[OAuth Callback] ⚠️ WebSocket connection failed, but OAuth succeeded");
+        }
+        
         // Send HTML that closes the popup and notifies parent window
         res.send(`
           <!DOCTYPE html>
@@ -1030,6 +1040,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
             tokenDate: new Date().toISOString(),
           },
         });
+        
+        // Automatically connect WebSocket after successful login
+        console.log("[Token Exchange] Initializing WebSocket connection...");
+        await realtimeSignalGenerator.initialize();
+        const wsConnected = await realtimeSignalGenerator.connectZerodha();
+        if (wsConnected) {
+          console.log("[Token Exchange] ✅ WebSocket connected automatically");
+        } else {
+          console.log("[Token Exchange] ⚠️ WebSocket connection failed, but OAuth succeeded");
+        }
         
         res.json({ success: true, message: "Connected to Zerodha successfully" });
       } else {

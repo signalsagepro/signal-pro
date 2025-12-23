@@ -111,9 +111,21 @@ export class ZerodhaAdapter implements IBrokerAdapter {
         };
       } else {
         const error = await response.json();
+        const errorMsg = error.message || "Failed to connect to Zerodha";
+        
+        // Check if error indicates token expiration
+        if (response.status === 403 || response.status === 401 || 
+            errorMsg.toLowerCase().includes('token') || 
+            errorMsg.toLowerCase().includes('session')) {
+          return {
+            success: false,
+            message: "Token expired or invalid. Please re-authenticate.",
+          };
+        }
+        
         return {
           success: false,
-          message: error.message || "Failed to connect to Zerodha",
+          message: errorMsg,
         };
       }
     } catch (error) {

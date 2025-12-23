@@ -77,6 +77,7 @@ export class RealtimeSignalGenerator {
   private assetTokenMap: Map<string, { symbol: string; assetId: string; exchange: string }> = new Map();
   private tokenToAssetMap: Map<number, string> = new Map(); // instrumentToken -> assetId
   private isInitialized = false;
+  private tokenValidationInterval: NodeJS.Timeout | null = null;
   
   // Candle history for proper EMA calculation: key = "assetId-timeframe" (e.g., "asset1-5m")
   private candleHistories: Map<string, CandleHistory> = new Map();
@@ -123,8 +124,113 @@ export class RealtimeSignalGenerator {
       console.error(`[Realtime Signals] ${data.broker} error:`, data.error);
     });
 
+    brokerWebSocket.on("token_expired", async (data: any) => {
+      console.error(`[Realtime Signals] ${data.broker} token expired - clearing credentials`);
+      try {
+        // Clear the expired token from database
+        const configs = await storage.getBrokerConfigs();
+        const brokerConfig = configs.find(c => c.name === data.broker);
+        if (brokerConfig) {
+          await storage.updateBrokerConfig(brokerConfig.id, {
+            connected: false,
+            metadata: {
+              ...(brokerConfig.metadata as Record<string, unknown> || {}),
+              accessToken: null,
+              userId: null,
+              tokenDate: null,
+            },
+          });
+          console.log(`[Realtime Signals] ✅ Cleared expired token for ${data.broker}`);
+          console.log(`[Realtime Signals] ⚠️ Please re-authenticate via the broker configuration page`);
+        }
+      } catch (error) {
+        console.error(`[Realtime Signals] Failed to clear expired token:`, error);
+      }
+    });
+
+    // Start periodic token validation (every 30 minutes)
+    this.startTokenValidation();
+
     this.isInitialized = true;
     console.log("[Realtime Signals] Initialized successfully");
+  }
+
+  /**
+   * Start periodic token validation to detect expiration before WebSocket failures
+   */
+  private startTokenValidation() {
+    if (this.tokenValidationInterval) {
+      return; // Already running
+    }
+
+    console.log("[Realtime Signals] Starting token validation (every 30 minutes)");
+    
+    this.tokenValidationInterval = setInterval(async () => {
+      try {
+        const configs = await storage.getBrokerConfigs();
+        const zerodhaConfig = configs.find(c => c.name === "zerodha" && c.connected);
+        
+        if (!zerodhaConfig) {
+          return;
+        }
+
+        const metadata = zerodhaConfig.metadata as Record<string, any> || {};
+        if (!metadata.accessToken) {
+          return;
+        }
+
+        // Test the token by making a lightweight API call
+        const { ZerodhaAdapter } = await import("./broker-service");
+        const adapter = new ZerodhaAdapter();
+        const result = await adapter.connect({
+          apiKey: zerodhaConfig.apiKey!,
+          apiSecret: zerodhaConfig.apiSecret || "",
+          accessToken: metadata.accessToken,
+        });
+
+        if (!result.success) {
+          console.error("[Realtime Signals] Token validation failed:", result.message);
+          
+          // Check if it's a token expiration issue
+          if (result.message.toLowerCase().includes('token') || 
+              result.message.toLowerCase().includes('session') ||
+              result.message.toLowerCase().includes('expired')) {
+            console.error("[Realtime Signals] ❌ Token expired - clearing credentials");
+            
+            // Clear expired token
+            await storage.updateBrokerConfig(zerodhaConfig.id, {
+              connected: false,
+              metadata: {
+                ...(metadata || {}),
+                accessToken: null,
+                userId: null,
+                tokenDate: null,
+              },
+            });
+            
+            // Disconnect WebSocket
+            brokerWebSocket.disconnect("zerodha");
+            
+            console.log("[Realtime Signals] ⚠️ Please re-authenticate via the broker configuration page");
+          }
+        } else {
+          console.log("[Realtime Signals] Token validation passed ✓");
+        }
+      } catch (error) {
+        console.error("[Realtime Signals] Token validation error:", error);
+      }
+    }, 30 * 60 * 1000); // Every 30 minutes
+  }
+
+  /**
+   * Stop token validation interval
+   */
+  private stopTokenValidation() {
+    if (this.tokenValidationInterval) {
+      clearInterval(this.tokenValidationInterval);
+      this.tokenValidationInterval = null;
+      console.log("[Realtime Signals] Token validation stopped");
+    }
   }
 
   /**
@@ -593,6 +699,7 @@ export class RealtimeSignalGenerator {
    * Disconnect from WebSocket
    */
   disconnect() {
+    this.stopTokenValidation();
     brokerWebSocket.disconnectAll();
     console.log("[Realtime Signals] Disconnected from all brokers");
   }
