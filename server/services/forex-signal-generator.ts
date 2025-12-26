@@ -199,7 +199,8 @@ export class ForexSignalGenerator {
       closedCandle = { ...history.currentCandle };
       history.candles.push(closedCandle);
 
-      if (history.candles.length > 250) {
+      // Keep 500+ candles for accurate EMA calculation (TradingView compatible)
+      if (history.candles.length > 500) {
         history.candles.shift();
       }
 

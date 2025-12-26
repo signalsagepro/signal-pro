@@ -27,6 +27,15 @@ export interface MarketQuote {
   timestamp: Date;
 }
 
+export interface HistoricalCandle {
+  timestamp: Date;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
 export interface OrderRequest {
   symbol: string;
   exchange: string;
@@ -55,6 +64,13 @@ export interface IBrokerAdapter {
   
   getQuote(symbol: string, exchange?: string): Promise<MarketQuote | null>;
   getQuotes(symbols: string[], exchange?: string): Promise<MarketQuote[]>;
+  
+  getHistoricalCandles?(
+    instrumentToken: number,
+    interval: string,
+    from: Date,
+    to: Date
+  ): Promise<HistoricalCandle[]>;
   
   placeOrder(order: OrderRequest): Promise<OrderResponse>;
   cancelOrder(orderId: string): Promise<boolean>;
@@ -252,6 +268,78 @@ export class ZerodhaAdapter implements IBrokerAdapter {
       if (quote) quotes.push(quote);
     }
     return quotes;
+  }
+
+  /**
+   * Fetch historical candle data from Zerodha Kite API
+   * API: GET /instruments/historical/:instrument_token/:interval
+   * 
+   * Required for accurate EMA calculation matching TradingView.
+   * TradingView uses ALL historical data to seed the EMA, so we need
+   * at least 500+ candles for EMA 200 to converge properly.
+   * 
+   * @param instrumentToken - Zerodha instrument token (e.g., 256265 for NIFTY 50)
+   * @param interval - Candle interval: minute, 3minute, 5minute, 10minute, 15minute, 30minute, 60minute, day
+   * @param from - Start date
+   * @param to - End date
+   * @returns Array of historical candles
+   */
+  async getHistoricalCandles(
+    instrumentToken: number,
+    interval: string,
+    from: Date,
+    to: Date
+  ): Promise<HistoricalCandle[]> {
+    try {
+      // Format dates as "yyyy-mm-dd hh:mm:ss" for Zerodha API
+      // Zerodha expects: from=2017-12-15+09:15:00 (space URL-encoded as +)
+      const formatDate = (d: Date) => {
+        const pad = (n: number) => n.toString().padStart(2, '0');
+        // Format: yyyy-mm-dd hh:mm:ss (space will be URL encoded)
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+      };
+
+      const fromStr = encodeURIComponent(formatDate(from));
+      const toStr = encodeURIComponent(formatDate(to));
+
+      const url = `${this.baseUrl}/instruments/historical/${instrumentToken}/${interval}?from=${fromStr}&to=${toStr}`;
+      
+      const response = await fetch(url, {
+        headers: {
+          "X-Kite-Version": "3",
+          "Authorization": `token ${this.apiKey}:${this.accessToken}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const candles: HistoricalCandle[] = [];
+        
+        // Zerodha returns: [timestamp, open, high, low, close, volume]
+        if (data.data?.candles && Array.isArray(data.data.candles)) {
+          for (const candle of data.data.candles) {
+            candles.push({
+              timestamp: new Date(candle[0]),
+              open: candle[1],
+              high: candle[2],
+              low: candle[3],
+              close: candle[4],
+              volume: candle[5],
+            });
+          }
+        }
+        
+        console.log(`[Zerodha] Fetched ${candles.length} historical candles for token ${instrumentToken}`);
+        return candles;
+      } else {
+        const error = await response.json();
+        console.error(`[Zerodha] Historical data error:`, error.message || error);
+        return [];
+      }
+    } catch (error) {
+      console.error(`[Zerodha] Historical candles fetch error:`, error);
+      return [];
+    }
   }
 
   async placeOrder(order: OrderRequest): Promise<OrderResponse> {

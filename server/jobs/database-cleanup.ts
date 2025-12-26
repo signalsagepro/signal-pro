@@ -6,13 +6,13 @@ import { lt, sql } from "drizzle-orm";
  * Database Cleanup Job
  * 
  * Runs every 24 hours to clean up old data while preserving:
- * - Last 250 candles per asset/timeframe (required for EMA200 calculation)
+ * - Last 500 candles per asset/timeframe (required for TradingView-compatible EMA200)
  * - All users, assets, strategies, broker configs, notification configs
  * 
  * Deletes:
  * - Signals older than 24 hours
  * - Logs older than 24 hours
- * - Candle data beyond last 250 per asset/timeframe
+ * - Candle data beyond last 500 per asset/timeframe
  */
 
 export async function cleanupOldData() {
@@ -38,9 +38,9 @@ export async function cleanupOldData() {
     
     console.log(`[Cleanup] Deleted ${deletedLogs.length} old logs`);
 
-    // 3. Keep only last 250 candles per asset/timeframe
-    // This ensures we have enough data for EMA200 calculation (needs 200+ points)
-    // Plus 50 buffer for accuracy
+    // 3. Keep only last 500 candles per asset/timeframe
+    // This ensures we have enough data for TradingView-compatible EMA200 calculation
+    // EMA needs 500+ candles to converge properly and match TradingView values
     await db.execute(sql`
       DELETE FROM candle_data
       WHERE id NOT IN (
@@ -52,11 +52,11 @@ export async function cleanupOldData() {
                  ) as rn
           FROM candle_data
         ) ranked
-        WHERE rn <= 250
+        WHERE rn <= 500
       )
     `);
 
-    console.log(`[Cleanup] Cleaned up old candle data (kept last 250 per asset/timeframe)`);
+    console.log(`[Cleanup] Cleaned up old candle data (kept last 500 per asset/timeframe)`);
     console.log(`[Cleanup] Cleanup completed successfully at ${new Date().toISOString()}`);
     
     return {

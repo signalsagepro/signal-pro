@@ -480,8 +480,9 @@ export class BrokerWebSocketManager extends EventEmitter {
     const history = this.priceHistory.get(key)!;
     history.push(tick.lastPrice);
     
-    // Keep only last 250 prices
-    if (history.length > 250) {
+    // Keep 500+ prices for accurate EMA calculation (TradingView compatible)
+    // EMA 200 needs sufficient warm-up period to converge properly
+    if (history.length > 500) {
       history.shift();
     }
 

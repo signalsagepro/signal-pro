@@ -2,7 +2,12 @@ import { storage } from "../storage";
 import { signalDetector, type MarketData } from "./signal-detector";
 import { brokerWebSocket } from "./broker-websocket";
 import { emaCalculator } from "./ema-calculator";
+import { ZerodhaAdapter, type HistoricalCandle } from "./broker-service";
 import type { SignalBroadcastCallback } from "./market-data-generator";
+
+// Minimum candles required for accurate EMA matching TradingView
+// TradingView uses ALL historical data, so we need enough for EMA 200 to converge
+const MIN_CANDLES_FOR_EMA = 500;
 
 /**
  * Candle data structure for aggregating ticks
@@ -258,12 +263,170 @@ export class RealtimeSignalGenerator {
         const success = brokerWebSocket.subscribe(broker, instrumentTokens);
         if (success) {
           console.log(`[Realtime Signals] ✅ Subscribed to ${instrumentTokens.length}/${enabledAssets.length} instruments on ${broker}`);
+          
+          // Fetch historical data to warm up EMA calculation (TradingView compatible)
+          if (broker === "zerodha") {
+            await this.fetchHistoricalDataForAssets(enabledAssets, instrumentTokens);
+          }
         }
       } else {
         console.log("[Realtime Signals] ⚠️ No valid instrument tokens found for any assets");
       }
     } catch (error) {
       console.error("[Realtime Signals] Error subscribing to assets:", error);
+    }
+  }
+
+  /**
+   * Fetch historical candle data from Zerodha to warm up EMA calculation.
+   * This is essential for matching TradingView's EMA values.
+   * TradingView uses ALL historical data, so we fetch 500+ candles.
+   * 
+   * Optimized for 200+ assets:
+   * - Runs in background (non-blocking)
+   * - Processes in batches with rate limiting
+   * - Zerodha rate limit: ~3 requests/second
+   */
+  private async fetchHistoricalDataForAssets(assets: any[], instrumentTokens: number[]) {
+    // Run in background - don't block WebSocket subscription
+    this.fetchHistoricalDataInBackground(assets, instrumentTokens).catch(err => {
+      console.error("[Realtime Signals] Background historical fetch error:", err);
+    });
+  }
+
+  /**
+   * Background historical data fetcher with optimized batching
+   * Processes assets in parallel batches while respecting rate limits
+   */
+  private async fetchHistoricalDataInBackground(assets: any[], instrumentTokens: number[]) {
+    try {
+      const configs = await storage.getBrokerConfigs();
+      const zerodhaConfig = configs.find(c => c.name === "zerodha" && c.connected);
+      
+      if (!zerodhaConfig) {
+        console.log("[Realtime Signals] Zerodha not connected, skipping historical data fetch");
+        return;
+      }
+
+      const metadata = zerodhaConfig.metadata as Record<string, any> || {};
+      if (!metadata.accessToken) {
+        console.log("[Realtime Signals] No access token, skipping historical data fetch");
+        return;
+      }
+
+      const adapter = new ZerodhaAdapter();
+      await adapter.connect({
+        apiKey: zerodhaConfig.apiKey!,
+        apiSecret: zerodhaConfig.apiSecret || "",
+        accessToken: metadata.accessToken,
+      });
+
+      const totalAssets = instrumentTokens.length;
+      console.log(`[Realtime Signals] 📊 Starting background historical data fetch for ${totalAssets} assets...`);
+
+      // Calculate date range for historical data
+      const to = new Date();
+      const from5m = new Date(to.getTime() - 7 * 24 * 60 * 60 * 1000); // 7 days back for 5m
+      const from15m = new Date(to.getTime() - 30 * 24 * 60 * 60 * 1000); // 30 days back for 15m
+
+      let successCount = 0;
+      let failCount = 0;
+      let processed = 0;
+
+      // Process in batches of 3 (Zerodha allows ~3 requests/second)
+      const BATCH_SIZE = 3;
+      const BATCH_DELAY_MS = 1100; // Slightly over 1 second for safety
+
+      for (let i = 0; i < instrumentTokens.length; i += BATCH_SIZE) {
+        const batch = instrumentTokens.slice(i, i + BATCH_SIZE);
+        
+        // Process batch in parallel
+        const batchPromises = batch.map(async (token) => {
+          const assetId = this.tokenToAssetMap.get(token);
+          if (!assetId) return { success: false, symbol: 'unknown' };
+
+          const asset = assets.find(a => a.id === assetId);
+          if (!asset) return { success: false, symbol: 'unknown' };
+
+          try {
+            // Fetch both timeframes
+            const [candles5m, candles15m] = await Promise.all([
+              adapter.getHistoricalCandles(token, "5minute", from5m, to),
+              adapter.getHistoricalCandles(token, "15minute", from15m, to),
+            ]);
+
+            if (candles5m.length > 0) {
+              this.loadHistoricalCandles(assetId, "5m", candles5m);
+            }
+            if (candles15m.length > 0) {
+              this.loadHistoricalCandles(assetId, "15m", candles15m);
+            }
+
+            return { 
+              success: candles5m.length > 0 || candles15m.length > 0, 
+              symbol: asset.symbol,
+              candles5m: candles5m.length,
+              candles15m: candles15m.length,
+            };
+          } catch (error) {
+            return { success: false, symbol: asset.symbol, error };
+          }
+        });
+
+        const results = await Promise.all(batchPromises);
+        
+        for (const result of results) {
+          processed++;
+          if (result.success) {
+            successCount++;
+          } else if (result.symbol !== 'unknown') {
+            failCount++;
+          }
+        }
+
+        // Progress update every 10% or every 20 assets
+        if (processed % Math.max(20, Math.floor(totalAssets / 10)) === 0 || processed === totalAssets) {
+          const percent = Math.round((processed / totalAssets) * 100);
+          console.log(`[Realtime Signals] 📊 Historical data: ${percent}% (${successCount}/${processed} loaded)`);
+        }
+
+        // Rate limit delay between batches (only if more batches remaining)
+        if (i + BATCH_SIZE < instrumentTokens.length) {
+          await new Promise(resolve => setTimeout(resolve, BATCH_DELAY_MS));
+        }
+      }
+
+      console.log(`[Realtime Signals] ✅ Historical data fetch complete: ${successCount} success, ${failCount} failed out of ${totalAssets} assets`);
+    } catch (error) {
+      console.error("[Realtime Signals] Error in background historical fetch:", error);
+    }
+  }
+
+  /**
+   * Load historical candles into candle history for EMA calculation
+   */
+  private loadHistoricalCandles(assetId: string, timeframe: string, candles: HistoricalCandle[]) {
+    const history = this.getCandleHistory(assetId, timeframe);
+    
+    // Convert historical candles to our internal format and add to history
+    for (const candle of candles) {
+      history.candles.push({
+        open: candle.open,
+        high: candle.high,
+        low: candle.low,
+        close: candle.close,
+        timestamp: candle.timestamp.getTime(),
+      });
+    }
+
+    // Keep only the most recent candles (matching TradingView's calculation window)
+    if (history.candles.length > MIN_CANDLES_FOR_EMA) {
+      history.candles = history.candles.slice(-MIN_CANDLES_FOR_EMA);
+    }
+
+    // Update last candle time
+    if (history.candles.length > 0) {
+      history.lastCandleTime = history.candles[history.candles.length - 1].timestamp;
     }
   }
 
@@ -516,8 +679,9 @@ export class RealtimeSignalGenerator {
       closedCandle = { ...history.currentCandle };
       history.candles.push(closedCandle);
       
-      // Keep only last 250 candles for EMA calculation
-      if (history.candles.length > 250) {
+      // Keep enough candles for accurate EMA calculation (TradingView compatible)
+      // Need 500+ candles for EMA 200 to converge properly
+      if (history.candles.length > MIN_CANDLES_FOR_EMA) {
         history.candles.shift();
       }
       

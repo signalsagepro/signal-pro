@@ -15,11 +15,21 @@ export interface EMAResult {
 /**
  * EMA Calculator implementing the standard Exponential Moving Average formula.
  * 
+ * This implementation matches TradingView's EMA calculation:
+ * 
  * Formula: EMA = (Close - Previous EMA) × Multiplier + Previous EMA
  * Multiplier = 2 / (Period + 1)
  * 
  * The first EMA value is initialized using a Simple Moving Average (SMA)
  * of the first `period` data points.
+ * 
+ * IMPORTANT: To match TradingView's EMA values, you need sufficient historical data:
+ * - TradingView uses ALL historical data from the beginning of the chart
+ * - "Old data points never leave the average" (TradingView docs)
+ * - For EMA 200 to converge properly, use at least 500+ candles
+ * - EMA calculated on candle CLOSE prices only, not tick prices
+ * 
+ * @see https://www.tradingview.com/support/solutions/43000502589-moving-averages/
  */
 export class EMACalculator {
   /**
