@@ -100,6 +100,7 @@ export default function DevEmaDebug() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [debugStatus, setDebugStatus] = useState<any>(null);
+  const [todayOnly, setTodayOnly] = useState(true); // Default to today only
 
   // Fetch debug status
   const fetchDebugStatus = async () => {
@@ -159,7 +160,7 @@ export default function DevEmaDebug() {
     
     try {
       // Use query param to avoid UUID routing issues
-      const response = await fetch(`/api/ema/chart?key=${encodeURIComponent(selectedAsset)}&limit=100`);
+      const response = await fetch(`/api/ema/chart?key=${encodeURIComponent(selectedAsset)}&limit=100&today=${todayOnly}`);
       
       // Check content type before parsing
       const contentType = response.headers.get("content-type");
@@ -316,13 +317,13 @@ export default function DevEmaDebug() {
     return () => clearInterval(interval);
   }, []);
 
-  // Fetch data when asset changes
+  // Fetch data when asset or todayOnly changes
   useEffect(() => {
     if (selectedAsset) {
       fetchChartData();
       fetchSignalCheck();
     }
-  }, [selectedAsset]);
+  }, [selectedAsset, todayOnly]);
 
   // Fetch signal check when strategy changes
   useEffect(() => {
@@ -400,6 +401,25 @@ export default function DevEmaDebug() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button 
+                variant={todayOnly ? "default" : "outline"} 
+                size="sm"
+                onClick={() => setTodayOnly(true)}
+                className={todayOnly ? "bg-blue-500 hover:bg-blue-600" : ""}
+              >
+                📅 Today Only
+              </Button>
+              <Button 
+                variant={!todayOnly ? "default" : "outline"} 
+                size="sm"
+                onClick={() => setTodayOnly(false)}
+                className={!todayOnly ? "bg-blue-500 hover:bg-blue-600" : ""}
+              >
+                📊 All Data
+              </Button>
             </div>
 
             <Button 

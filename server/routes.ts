@@ -1527,6 +1527,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const key = req.query.key as string;
       const limit = parseInt(req.query.limit as string) || 100;
+      const todayOnly = req.query.today === "true";
       
       if (!key) {
         res.status(400).json({ error: "key query parameter required" });
@@ -1551,8 +1552,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return;
       }
       
-      // Get last N candles
-      const candles = history.candles.slice(-limit);
+      // Filter candles based on todayOnly flag
+      let candles;
+      if (todayOnly) {
+        // Get today's market open time (9:15 AM IST)
+        const now = new Date();
+        const istOffset = 5.5 * 60 * 60 * 1000; // IST is UTC+5:30
+        const istNow = new Date(now.getTime() + istOffset);
+        const todayStart = new Date(Date.UTC(
+          istNow.getUTCFullYear(),
+          istNow.getUTCMonth(),
+          istNow.getUTCDate(),
+          3, 45, 0 // 9:15 AM IST = 3:45 AM UTC
+        ));
+        const todayStartMs = todayStart.getTime();
+        
+        // Filter candles from today's market open
+        candles = history.candles.filter((c: any) => c.timestamp >= todayStartMs);
+        
+        // If no candles today, return empty with message
+        if (candles.length === 0) {
+          candles = history.candles.slice(-10); // Show last 10 as fallback
+        }
+      } else {
+        // Get last N candles
+        candles = history.candles.slice(-limit);
+      }
       
       // Calculate EMA 50 and EMA 200 for the candles
       const { emaCalculator } = await import("./services/ema-calculator");
@@ -1562,19 +1587,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const ema50Values = emaCalculator.calculateEMA(closePrices, 50);
       const ema200Values = emaCalculator.calculateEMA(closePrices, 200);
       
-      // Get the last N values aligned with candles
-      const startIndex = allCandles.length - limit;
-      
-      const chartData = candles.map((candle: any, i: number) => {
-        const globalIndex = startIndex + i;
+      // Find the starting index for our filtered candles in the full history
+      // This ensures EMA values are correctly aligned
+      const chartData = candles.map((candle: any) => {
+        // Find this candle's index in the full history
+        const globalIndex = allCandles.findIndex((c: any) => c.timestamp === candle.timestamp);
         return {
           time: Math.floor(candle.timestamp / 1000), // Unix timestamp in seconds
           open: candle.open,
           high: candle.high,
           low: candle.low,
           close: candle.close,
-          ema50: isNaN(ema50Values[globalIndex]) ? null : ema50Values[globalIndex],
-          ema200: isNaN(ema200Values[globalIndex]) ? null : ema200Values[globalIndex],
+          ema50: globalIndex >= 0 && !isNaN(ema50Values[globalIndex]) ? ema50Values[globalIndex] : null,
+          ema200: globalIndex >= 0 && !isNaN(ema200Values[globalIndex]) ? ema200Values[globalIndex] : null,
         };
       });
       
