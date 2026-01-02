@@ -1567,76 +1567,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Filter candles based on todayOnly flag
       let candles;
       if (todayOnly) {
-        // Get today's date in IST and create start/end boundaries
-        const now = new Date();
-        const istOffset = 5.5 * 60 * 60 * 1000; // IST is UTC+5:30
-        const istTime = now.getTime() + istOffset;
-        const istDate = new Date(istTime);
+        // Get current UTC time and convert to IST date components
+        const nowUtc = Date.now();
+        const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000; // +5:30 from UTC
         
-        // Today's start: 12:00 AM IST (beginning of today)
-        const todayStartIST = new Date(
-          istDate.getFullYear(),
-          istDate.getMonth(),
-          istDate.getDate(),
-          0, 0, 0, 0 // 12:00 AM IST
-        );
-        const todayStartMs = todayStartIST.getTime() - istOffset; // Convert to UTC
+        // Get today's date in IST
+        const nowInIST = new Date(nowUtc + IST_OFFSET_MS);
+        const todayYear = nowInIST.getUTCFullYear();
+        const todayMonth = nowInIST.getUTCMonth();
+        const todayDate = nowInIST.getUTCDate();
         
-        // Tomorrow's start: 12:00 AM IST (end boundary)
-        const tomorrowStartIST = new Date(
-          istDate.getFullYear(),
-          istDate.getMonth(),
-          istDate.getDate() + 1,
-          0, 0, 0, 0 // 12:00 AM IST tomorrow
-        );
-        const tomorrowStartMs = tomorrowStartIST.getTime() - istOffset; // Convert to UTC
+        // Today 00:00:00 IST in UTC milliseconds
+        const todayStartUtc = Date.UTC(todayYear, todayMonth, todayDate, 0, 0, 0) - IST_OFFSET_MS;
+        // Tomorrow 00:00:00 IST in UTC milliseconds
+        const tomorrowStartUtc = Date.UTC(todayYear, todayMonth, todayDate + 1, 0, 0, 0) - IST_OFFSET_MS;
         
-        // Debug logging
-        console.log(`[EMA Chart] Today filter boundaries:`, {
-          now: now.toISOString(),
-          todayStartIST: todayStartIST.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }),
-          tomorrowStartIST: tomorrowStartIST.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }),
-          todayStartMs,
-          tomorrowStartMs
+        console.log(`[EMA Chart] Today filter:`, {
+          nowUtc: new Date(nowUtc).toISOString(),
+          todayIST: `${todayYear}-${String(todayMonth+1).padStart(2,'0')}-${String(todayDate).padStart(2,'0')}`,
+          todayStartUtc: new Date(todayStartUtc).toISOString(),
+          tomorrowStartUtc: new Date(tomorrowStartUtc).toISOString(),
         });
         
-        // Filter candles to only include today's data (between start and end of today)
+        // Filter candles: timestamp must be >= today start AND < tomorrow start
         candles = history.candles.filter((c: any) => 
-          c.timestamp >= todayStartMs && c.timestamp < tomorrowStartMs
+          c.timestamp >= todayStartUtc && c.timestamp < tomorrowStartUtc
         );
         
         console.log(`[EMA Chart] Filtered ${candles.length} candles for today from ${history.candles.length} total`);
         
-        // IMPORTANT: Include current/incomplete candle for live price display
-        if (history.currentCandle) {
-          console.log(`[EMA Chart] Adding current candle:`, {
-            timestamp: history.currentCandle.timestamp,
-            price: history.currentCandle.close,
-            timestampLocal: new Date(history.currentCandle.timestamp).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })
-          });
-          
-          // Only include if current candle is from today (within today's boundaries)
-          if (history.currentCandle.timestamp >= todayStartMs && history.currentCandle.timestamp < tomorrowStartMs) {
-            candles.push(history.currentCandle);
-          }
+        // Log first few candle timestamps for debugging
+        if (history.candles.length > 0) {
+          const sampleCandles = history.candles.slice(-5);
+          console.log(`[EMA Chart] Last 5 candle timestamps:`, sampleCandles.map((c: any) => ({
+            ts: c.timestamp,
+            utc: new Date(c.timestamp).toISOString(),
+            ist: new Date(c.timestamp + IST_OFFSET_MS).toISOString().replace('T', ' ').slice(0, 19) + ' IST'
+          })));
         }
         
-        // If no candles today, return empty with message
+        // Include current candle if from today
+        if (history.currentCandle && 
+            history.currentCandle.timestamp >= todayStartUtc && 
+            history.currentCandle.timestamp < tomorrowStartUtc) {
+          candles.push(history.currentCandle);
+        }
+        
+        // Fallback if no candles today
         if (candles.length === 0) {
-          candles = history.candles.slice(-10); // Show last 10 as fallback
+          candles = history.candles.slice(-10);
           console.log(`[EMA Chart] No candles for today, showing last 10 as fallback`);
         }
       } else {
-        // Get last N candles (including current candle for live data)
+        // Get last N candles
         candles = history.candles.slice(-limit);
-        
-        // Also include current/incomplete candle for live price display
         if (history.currentCandle) {
-          console.log(`[EMA Chart] Adding current candle to all data view:`, {
-            timestamp: history.currentCandle.timestamp,
-            price: history.currentCandle.close,
-            timestampLocal: new Date(history.currentCandle.timestamp).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })
-          });
           candles.push(history.currentCandle);
         }
       }
@@ -1649,28 +1634,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const ema50Values = emaCalculator.calculateEMA(closePrices, 50);
       const ema200Values = emaCalculator.calculateEMA(closePrices, 200);
       
-      // Find the starting index for our filtered candles in the full history
-      // This ensures EMA values are correctly aligned
+      // Map candles to chart format with EMA values
       const chartData = candles.map((candle: any) => {
-        // Find this candle's index in the full history (for completed candles)
         const globalIndex = allCandles.findIndex((c: any) => c.timestamp === candle.timestamp);
-        
-        // For current candle, use the last EMA values since it's not in completed history
         const isCurrentCandle = globalIndex === -1;
         
-        // Debug timestamp conversion
+        // Convert timestamp to seconds for lightweight-charts
         const timeInSeconds = Math.floor(candle.timestamp / 1000);
-        const timeLocal = new Date(candle.timestamp).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-        
-        console.log(`[EMA Chart] Candle time mapping:`, {
-          originalTimestamp: candle.timestamp,
-          timeInSeconds,
-          timeLocal,
-          utcTime: new Date(candle.timestamp).toISOString()
-        });
         
         return {
-          time: timeInSeconds, // Unix timestamp in seconds for lightweight-charts
+          time: timeInSeconds,
           open: candle.open,
           high: candle.high,
           low: candle.low,
