@@ -374,6 +374,80 @@ export class RealtimeSignalGenerator {
   }
 
   /**
+   * Detect and fill gaps in candle data with historical data
+   */
+  private async backfillMissingData(assetId: string, timeframe: string) {
+    const history = this.getCandleHistory(assetId, timeframe);
+    
+    if (history.candles.length === 0) return;
+    
+    const now = Date.now();
+    const lastCandle = history.candles[history.candles.length - 1];
+    const intervalMs = this.TIMEFRAMES[timeframe as keyof typeof this.TIMEFRAMES];
+    
+    // Calculate expected next candle time after last candle
+    const expectedNextCandleTime = lastCandle.timestamp + intervalMs;
+    const timeSinceLastCandle = now - lastCandle.timestamp;
+    
+    // If gap is more than 2 intervals, backfill
+    const gapThreshold = intervalMs * 2;
+    
+    if (timeSinceLastCandle > gapThreshold && isMarketOpen()) {
+      console.log(`[Backfill] Detected ${Math.floor(timeSinceLastCandle / intervalMs)} missing candles for ${assetId} ${timeframe}`);
+      await this.backfillAssetData(assetId, timeframe, lastCandle.timestamp, now);
+    }
+  }
+
+  /**
+   * Backfill historical data for a specific asset and timeframe
+   */
+  private async backfillAssetData(assetId: string, timeframe: string, fromTime: number, toTime: number) {
+    try {
+      const configs = await storage.getBrokerConfigs();
+      const zerodhaConfig = configs.find(c => c.name === "zerodha" && c.connected);
+      
+      if (!zerodhaConfig) return;
+      
+      const metadata = zerodhaConfig.metadata as Record<string, any> || {};
+      if (!metadata.accessToken) return;
+      
+      const { ZerodhaAdapter } = await import("./broker-service");
+      const adapter = new ZerodhaAdapter();
+      
+      await adapter.connect({
+        apiKey: zerodhaConfig.apiKey!,
+        apiSecret: zerodhaConfig.apiSecret || "",
+        accessToken: metadata.accessToken,
+      });
+      
+      // Find instrument token for this asset
+      const instrumentTokenEntry = Array.from(this.assetTokenMap.entries())
+        .find(([_, info]) => info.assetId === assetId);
+      
+      if (!instrumentTokenEntry) {
+        console.log(`[Backfill] No instrument token found for asset ${assetId}`);
+        return;
+      }
+      
+      const instrumentToken = parseInt(instrumentTokenEntry[0]);
+      const zerodhaTimeframe = timeframe === "5m" ? "5minute" : "15minute";
+      const from = new Date(fromTime);
+      const to = new Date(toTime);
+      
+      console.log(`[Backfill] Fetching ${zerodhaTimeframe} data for asset ${assetId} from ${from.toISOString()} to ${to.toISOString()}`);
+      
+      const candles = await adapter.getHistoricalCandles(instrumentToken, zerodhaTimeframe, from, to);
+      
+      if (candles.length > 0) {
+        console.log(`[Backfill] Retrieved ${candles.length} candles`);
+        this.loadHistoricalCandles(assetId, timeframe, candles);
+      }
+    } catch (error) {
+      console.error(`[Backfill] Error backfilling data for ${assetId}:`, error);
+    }
+  }
+
+  /**
    * Background historical data fetcher with optimized batching (public for API access)
    * Processes assets in parallel batches while respecting rate limits
    */
@@ -977,14 +1051,19 @@ export class RealtimeSignalGenerator {
    */
   private async processTickData(tickData: any) {
     try {
+      // Log all ticks for debugging (even when market closed)
+      const isOpen = isMarketOpen();
+      console.log(`[Realtime Signals] 🔸 Tick received: ${tickData.symbol} = ₹${tickData.lastPrice} [${getISTTimeString()}] Market: ${isOpen ? 'OPEN' : 'CLOSED'}`);
+      
       // Check if market is open
-      if (!isMarketOpen()) {
+      if (!isOpen) {
         return;
       }
 
       // Map instrument token to asset
       const assetInfo = this.assetTokenMap.get(tickData.symbol);
       if (!assetInfo) {
+        console.log(`[Realtime Signals] ⚠️ No asset mapping for ${tickData.symbol}`);
         return;
       }
 

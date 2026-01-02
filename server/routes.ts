@@ -1552,38 +1552,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return;
       }
       
+      // AUTO-BACKFILL: Check for gaps and backfill missing data
+      const generator = realtimeSignalGenerator as any;
+      if (generator.backfillMissingData) {
+        try {
+          await generator.backfillMissingData(assetId, timeframe);
+          console.log(`[EMA Chart] Backfill check completed for ${assetId} ${timeframe}`);
+        } catch (error) {
+          console.error(`[EMA Chart] Backfill error:`, error);
+          // Don't fail the request if backfill fails
+        }
+      }
+      
       // Filter candles based on todayOnly flag
       let candles;
       if (todayOnly) {
-        // Get today's market open time (9:15 AM IST)
+        // Get today's date in IST and create start/end boundaries
         const now = new Date();
-        
-        // Get IST date components
         const istOffset = 5.5 * 60 * 60 * 1000; // IST is UTC+5:30
         const istTime = now.getTime() + istOffset;
         const istDate = new Date(istTime);
         
-        // Create today's 9:15 AM IST timestamp
-        // Note: We need to subtract IST offset to get UTC time
-        const todayStart = new Date(
+        // Today's start: 12:00 AM IST (beginning of today)
+        const todayStartIST = new Date(
           istDate.getFullYear(),
           istDate.getMonth(),
           istDate.getDate(),
-          9, 15, 0, 0 // 9:15 AM in IST
+          0, 0, 0, 0 // 12:00 AM IST
         );
-        const todayStartMs = todayStart.getTime() - istOffset; // Convert back to UTC timestamp
+        const todayStartMs = todayStartIST.getTime() - istOffset; // Convert to UTC
+        
+        // Tomorrow's start: 12:00 AM IST (end boundary)
+        const tomorrowStartIST = new Date(
+          istDate.getFullYear(),
+          istDate.getMonth(),
+          istDate.getDate() + 1,
+          0, 0, 0, 0 // 12:00 AM IST tomorrow
+        );
+        const tomorrowStartMs = tomorrowStartIST.getTime() - istOffset; // Convert to UTC
         
         // Debug logging
-        console.log(`[EMA Chart] Today filter:`, {
+        console.log(`[EMA Chart] Today filter boundaries:`, {
           now: now.toISOString(),
-          istDate: istDate.toISOString(),
-          todayStart: todayStart.toISOString(),
+          todayStartIST: todayStartIST.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }),
+          tomorrowStartIST: tomorrowStartIST.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }),
           todayStartMs,
-          todayStartLocal: new Date(todayStartMs).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })
+          tomorrowStartMs
         });
         
-        // Filter candles from today's market open
-        candles = history.candles.filter((c: any) => c.timestamp >= todayStartMs);
+        // Filter candles to only include today's data (between start and end of today)
+        candles = history.candles.filter((c: any) => 
+          c.timestamp >= todayStartMs && c.timestamp < tomorrowStartMs
+        );
         
         console.log(`[EMA Chart] Filtered ${candles.length} candles for today from ${history.candles.length} total`);
         
@@ -1595,8 +1615,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             timestampLocal: new Date(history.currentCandle.timestamp).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })
           });
           
-          // Only include if current candle is from today
-          if (history.currentCandle.timestamp >= todayStartMs) {
+          // Only include if current candle is from today (within today's boundaries)
+          if (history.currentCandle.timestamp >= todayStartMs && history.currentCandle.timestamp < tomorrowStartMs) {
             candles.push(history.currentCandle);
           }
         }
@@ -1667,6 +1687,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get asset info
       const asset = await storage.getAsset(assetId);
       
+      // Add debug info about candle timestamps
+      const firstCandle = chartData.length > 0 ? chartData[0] : null;
+      const lastCandle = chartData.length > 0 ? chartData[chartData.length - 1] : null;
+      const currentCandle = history.currentCandle;
+      
+      console.log(`[EMA Chart] Response summary:`, {
+        totalCandles: allCandles.length,
+        returnedCandles: chartData.length,
+        firstCandleTime: firstCandle ? new Date(firstCandle.time * 1000).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) : 'None',
+        lastCandleTime: lastCandle ? new Date(lastCandle.time * 1000).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) : 'None',
+        currentCandleTime: currentCandle ? new Date(currentCandle.timestamp).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) : 'None',
+        currentTime: new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })
+      });
+
       res.json({
         assetId,
         assetName: asset?.name || assetId,
@@ -1677,6 +1711,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         latestEma50: ema50Values[ema50Values.length - 1],
         latestEma200: ema200Values[ema200Values.length - 1],
         data: chartData,
+        debug: {
+          firstCandleTime: firstCandle ? new Date(firstCandle.time * 1000).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) : null,
+          lastCandleTime: lastCandle ? new Date(lastCandle.time * 1000).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) : null,
+          currentCandleTime: currentCandle ? new Date(currentCandle.timestamp).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) : null,
+          currentTime: new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })
+        }
       });
     } catch (error) {
       console.error("EMA chart error:", error);
