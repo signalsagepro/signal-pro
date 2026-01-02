@@ -126,6 +126,14 @@ export default function DevEmaDebug() {
     }
   };
 
+  // Parse asset key - format is "assetId-timeframe" where assetId is a UUID with dashes
+  const parseAssetKey = (key: string): { assetId: string; timeframe: string } => {
+    const parts = key.split("-");
+    const timeframe = parts.pop()!; // Last part is timeframe (5m, 15m)
+    const assetId = parts.join("-"); // Rest is the UUID
+    return { assetId, timeframe };
+  };
+
   // Fetch chart data for selected asset
   const fetchChartData = async () => {
     if (!selectedAsset) return;
@@ -134,7 +142,7 @@ export default function DevEmaDebug() {
     setError(null);
     
     try {
-      const [assetId, timeframe] = selectedAsset.split("-");
+      const { assetId, timeframe } = parseAssetKey(selectedAsset);
       const response = await fetch(`/api/ema/chart/${assetId}/${timeframe}?limit=100`);
       
       if (!response.ok) {
@@ -157,7 +165,7 @@ export default function DevEmaDebug() {
     if (!selectedAsset || !selectedStrategy) return;
     
     try {
-      const [assetId, timeframe] = selectedAsset.split("-");
+      const { assetId, timeframe } = parseAssetKey(selectedAsset);
       const response = await fetch(`/api/ema/signal-check/${assetId}/${timeframe}/${selectedStrategy}`);
       
       if (!response.ok) {
@@ -316,7 +324,7 @@ export default function DevEmaDebug() {
   // Filter strategies by timeframe
   const filteredStrategies = selectedAsset 
     ? strategies.filter(s => {
-        const [, timeframe] = selectedAsset.split("-");
+        const { timeframe } = parseAssetKey(selectedAsset);
         return s.timeframe === timeframe;
       })
     : strategies;
