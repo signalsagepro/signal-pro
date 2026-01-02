@@ -1975,6 +1975,176 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Force backfill for a specific asset - useful for debugging
+  app.post("/api/ema/force-backfill", async (req, res) => {
+    try {
+      const { assetId, timeframe } = req.body;
+      
+      if (!assetId || !timeframe) {
+        res.status(400).json({ error: "assetId and timeframe required" });
+        return;
+      }
+      
+      console.log(`[API] Force backfill triggered for ${assetId} ${timeframe}`);
+      
+      // Get asset info
+      const asset = await storage.getAsset(assetId);
+      if (!asset) {
+        res.status(404).json({ error: `Asset ${assetId} not found` });
+        return;
+      }
+      
+      // Get Zerodha config
+      const configs = await storage.getBrokerConfigs();
+      const zerodhaConfig = configs.find(c => c.name === "zerodha" && c.connected);
+      
+      if (!zerodhaConfig) {
+        res.status(400).json({ error: "Zerodha not connected" });
+        return;
+      }
+      
+      const metadata = zerodhaConfig.metadata as Record<string, any> || {};
+      if (!metadata.accessToken) {
+        res.status(400).json({ error: "No Zerodha access token" });
+        return;
+      }
+      
+      // Find instrument token
+      let instrumentToken: number | null = null;
+      
+      // Method 1: From tokenToAssetMap
+      const generator = realtimeSignalGenerator as any;
+      if (generator.tokenToAssetMap) {
+        const entries = Array.from(generator.tokenToAssetMap.entries());
+        for (let i = 0; i < entries.length; i++) {
+          const [token, id] = entries[i] as [number, string];
+          if (id === assetId) {
+            instrumentToken = token;
+            break;
+          }
+        }
+      }
+      
+      // Method 2: From asset's instrumentToken field
+      if (!instrumentToken && asset.instrumentToken) {
+        instrumentToken = asset.instrumentToken;
+      }
+      
+      // Method 3: From known tokens
+      if (!instrumentToken && generator.getKnownTokens) {
+        const knownTokens = generator.getKnownTokens();
+        const symbol = asset.symbol.toUpperCase();
+        if (knownTokens[symbol]) {
+          instrumentToken = knownTokens[symbol];
+        }
+      }
+      
+      if (!instrumentToken) {
+        res.status(400).json({ 
+          error: `No instrument token found for ${asset.symbol}`,
+          suggestion: "Set instrumentToken in asset config or add to knownTokens"
+        });
+        return;
+      }
+      
+      console.log(`[API] Found instrument token ${instrumentToken} for ${asset.symbol}`);
+      
+      // Connect to Zerodha and fetch data
+      const { ZerodhaAdapter } = await import("./services/broker-service");
+      const adapter = new ZerodhaAdapter();
+      
+      await adapter.connect({
+        apiKey: zerodhaConfig.apiKey!,
+        apiSecret: zerodhaConfig.apiSecret || "",
+        accessToken: metadata.accessToken,
+      });
+      
+      // Calculate date range - today's full market hours
+      const now = Date.now();
+      const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+      const nowInIST = new Date(now + IST_OFFSET_MS);
+      const year = nowInIST.getUTCFullYear();
+      const month = nowInIST.getUTCMonth();
+      const date = nowInIST.getUTCDate();
+      
+      // Today 9:15 AM IST (market open)
+      const todayOpenUTC = Date.UTC(year, month, date, 3, 45, 0, 0);
+      // Today 3:30 PM IST (market close)
+      const todayCloseUTC = Date.UTC(year, month, date, 10, 0, 0, 0);
+      
+      const from = new Date(todayOpenUTC);
+      const to = new Date(Math.min(now, todayCloseUTC));
+      
+      console.log(`[API] Fetching ${timeframe} data from ${from.toISOString()} to ${to.toISOString()}`);
+      
+      const zerodhaTimeframe = timeframe === "5m" ? "5minute" : "15minute";
+      const candles = await adapter.getHistoricalCandles(instrumentToken, zerodhaTimeframe, from, to);
+      
+      console.log(`[API] Retrieved ${candles.length} candles from Zerodha`);
+      
+      if (candles.length > 0) {
+        // Load candles into history
+        if (generator.loadHistoricalCandles) {
+          generator.loadHistoricalCandles(assetId, timeframe, candles);
+        } else {
+          // Manual load
+          const key = `${assetId}-${timeframe}`;
+          const candleHistories = generator.candleHistories;
+          if (candleHistories) {
+            let history = candleHistories.get(key);
+            if (!history) {
+              history = { candles: [], currentCandle: null, lastCandleTime: 0 };
+              candleHistories.set(key, history);
+            }
+            
+            const existingTimestamps = new Set(history.candles.map((c: any) => c.timestamp));
+            let addedCount = 0;
+            
+            for (const candle of candles) {
+              const timestamp = candle.timestamp.getTime();
+              if (!existingTimestamps.has(timestamp)) {
+                history.candles.push({
+                  open: candle.open,
+                  high: candle.high,
+                  low: candle.low,
+                  close: candle.close,
+                  timestamp,
+                });
+                existingTimestamps.add(timestamp);
+                addedCount++;
+              }
+            }
+            
+            history.candles.sort((a: any, b: any) => a.timestamp - b.timestamp);
+            if (history.candles.length > 0) {
+              history.lastCandleTime = history.candles[history.candles.length - 1].timestamp;
+            }
+            
+            console.log(`[API] Added ${addedCount} candles, total now: ${history.candles.length}`);
+          }
+        }
+        
+        res.json({
+          success: true,
+          message: `Backfilled ${candles.length} candles for ${asset.symbol} ${timeframe}`,
+          from: from.toISOString(),
+          to: to.toISOString(),
+          candlesCount: candles.length,
+        });
+      } else {
+        res.json({
+          success: false,
+          message: "No candles returned from Zerodha",
+          from: from.toISOString(),
+          to: to.toISOString(),
+        });
+      }
+    } catch (error: any) {
+      console.error("[API] force-backfill error:", error);
+      res.status(500).json({ error: error.message || "Failed to backfill" });
+    }
+  });
+
   // Trigger historical data fetch for all assets
   app.post("/api/ema/fetch-historical", async (req, res) => {
     try {

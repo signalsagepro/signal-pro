@@ -401,13 +401,30 @@ export class RealtimeSignalGenerator {
    */
   private async backfillAssetData(assetId: string, timeframe: string, fromTime: number, toTime: number) {
     try {
+      console.log(`[Backfill] Starting backfill for ${assetId} ${timeframe}`);
+      
       const configs = await storage.getBrokerConfigs();
       const zerodhaConfig = configs.find(c => c.name === "zerodha" && c.connected);
       
-      if (!zerodhaConfig) return;
+      if (!zerodhaConfig) {
+        console.log(`[Backfill] Zerodha not connected, skipping`);
+        return;
+      }
       
       const metadata = zerodhaConfig.metadata as Record<string, any> || {};
-      if (!metadata.accessToken) return;
+      if (!metadata.accessToken) {
+        console.log(`[Backfill] No access token, skipping`);
+        return;
+      }
+      
+      // Get asset info to find symbol
+      const asset = await storage.getAsset(assetId);
+      if (!asset) {
+        console.log(`[Backfill] Asset ${assetId} not found in database`);
+        return;
+      }
+      
+      console.log(`[Backfill] Asset found: ${asset.symbol}`);
       
       const { ZerodhaAdapter } = await import("./broker-service");
       const adapter = new ZerodhaAdapter();
@@ -418,16 +435,41 @@ export class RealtimeSignalGenerator {
         accessToken: metadata.accessToken,
       });
       
-      // Find instrument token for this asset
-      const instrumentTokenEntry = Array.from(this.assetTokenMap.entries())
-        .find(([_, info]) => info.assetId === assetId);
+      // Find instrument token - try multiple methods
+      let instrumentToken: number | null = null;
       
-      if (!instrumentTokenEntry) {
-        console.log(`[Backfill] No instrument token found for asset ${assetId}`);
-        return;
+      // Method 1: Check tokenToAssetMap (reverse lookup)
+      const tokenEntries = Array.from(this.tokenToAssetMap.entries());
+      for (let i = 0; i < tokenEntries.length; i++) {
+        const [token, id] = tokenEntries[i];
+        if (id === assetId) {
+          instrumentToken = token;
+          console.log(`[Backfill] Found token ${token} from tokenToAssetMap`);
+          break;
+        }
       }
       
-      const instrumentToken = parseInt(instrumentTokenEntry[0]);
+      // Method 2: Check asset's instrumentToken field
+      if (!instrumentToken && asset.instrumentToken) {
+        instrumentToken = asset.instrumentToken;
+        console.log(`[Backfill] Using asset's instrumentToken: ${instrumentToken}`);
+      }
+      
+      // Method 3: Look up from known tokens by symbol
+      if (!instrumentToken) {
+        const knownTokens = this.getKnownTokens();
+        const symbol = asset.symbol.toUpperCase();
+        if (knownTokens[symbol]) {
+          instrumentToken = knownTokens[symbol];
+          console.log(`[Backfill] Found token ${instrumentToken} from knownTokens for ${symbol}`);
+        }
+      }
+      
+      if (!instrumentToken) {
+        console.log(`[Backfill] No instrument token found for asset ${assetId} (${asset.symbol})`);
+        console.log(`[Backfill] tokenToAssetMap has ${this.tokenToAssetMap.size} entries`);
+        return;
+      }
       const zerodhaTimeframe = timeframe === "5m" ? "5minute" : "15minute";
       const from = new Date(fromTime);
       const to = new Date(toTime);
@@ -603,13 +645,10 @@ export class RealtimeSignalGenerator {
   }
 
   /**
-   * Get instrument tokens for assets (public for API access)
-   * Priority: 1) Asset's instrumentToken field, 2) Known tokens lookup, 3) Skip
+   * Get known instrument tokens map
    */
-  public getInstrumentTokens(assets: any[]): number[] {
-    // Comprehensive instrument tokens for Indian markets
-    // These are NSE/BSE equity and index tokens - NOT futures tokens
-    const knownTokens: Record<string, number> = {
+  private getKnownTokens(): Record<string, number> {
+    return {
       // NSE Indices
       "NIFTY": 256265,
       "NIFTY50": 256265,
@@ -682,7 +721,17 @@ export class RealtimeSignalGenerator {
       "FEDERALBNK": 261889,
       "IDFCFIRSTB": 2863105,
       "PNB": 2730497,
-      
+    };
+  }
+
+  /**
+   * Get instrument tokens for assets (public for API access)
+   * Priority: 1) Asset's instrumentToken field, 2) Known tokens lookup, 3) Skip
+   */
+  public getInstrumentTokens(assets: any[]): number[] {
+    const knownTokens = this.getKnownTokens();
+    // Additional tokens
+    const additionalTokens: Record<string, number> = {
       // Other Popular Stocks
       "ADANIGREEN": 912129,
       "ADANIPOWER": 11536385,
@@ -756,6 +805,9 @@ export class RealtimeSignalGenerator {
       "LEAD": 53505543,
       "NICKEL": 53505287,
     };
+    
+    // Merge all tokens
+    const allTokens = { ...knownTokens, ...additionalTokens };
 
     const tokens: number[] = [];
     const unmappedAssets: string[] = [];
@@ -776,8 +828,8 @@ export class RealtimeSignalGenerator {
         ];
         
         for (const variant of symbolVariants) {
-          if (knownTokens[variant]) {
-            token = knownTokens[variant];
+          if (allTokens[variant]) {
+            token = allTokens[variant];
             break;
           }
         }
