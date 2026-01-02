@@ -103,19 +103,33 @@ export function EmaDebugChart() {
     if (!chartContainerRef.current) return;
 
     const chart = createChart(chartContainerRef.current, {
+      width: chartContainerRef.current.clientWidth,
+      height: 400,
       layout: {
-        background: { type: ColorType.Solid, color: "#1a1a2e" },
+        background: { color: "#1a1a2e" },
         textColor: "#d1d4dc",
       },
       grid: {
-        vertLines: { color: "#2a2a4a" },
-        horzLines: { color: "#2a2a4a" },
+        vertLines: {
+          color: "#2a2a4a",
+        },
+        horzLines: {
+          color: "#2a2a4a",
+        },
       },
-      width: chartContainerRef.current.clientWidth,
-      height: 400,
       timeScale: {
         timeVisible: true,
         secondsVisible: false,
+        tickMarkFormatter: (time: any) => {
+          const date = new Date(time * 1000); // Convert back to milliseconds
+          return date.toLocaleString('en-IN', { 
+            timeZone: 'Asia/Kolkata',
+            hour: '2-digit',
+            minute: '2-digit',
+            day: '2-digit',
+            month: '2-digit'
+          });
+        },
       },
     });
 

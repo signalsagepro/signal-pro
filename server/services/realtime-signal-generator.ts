@@ -76,32 +76,33 @@ function getISTTimeString(): string {
 }
 
 /**
- * Get market open time in milliseconds for today (9:15 AM IST)
+ * Get today's market open time (9:15 AM IST) in milliseconds
  * This is used to align candle periods to market open
  */
 function getMarketOpenMs(): number {
   const now = new Date();
-  // Get today's date in IST
-  const istOffset = 5.5 * 60 * 60 * 1000;
-  const istNow = new Date(now.getTime() + istOffset);
   
-  // Create 9:15 AM IST for today
-  const marketOpen = new Date(Date.UTC(
-    istNow.getUTCFullYear(),
-    istNow.getUTCMonth(),
-    istNow.getUTCDate(),
-    9 - 5, // 9 AM IST = 3:30 AM UTC (9 - 5.5 hours)
-    15 - 30, // 15 mins IST = -15 mins adjustment
-    0
-  ));
+  // Get IST date components
+  const istOffset = 5.5 * 60 * 60 * 1000; // IST is UTC+5:30
+  const istTime = now.getTime() + istOffset;
+  const istDate = new Date(istTime);
   
-  // Adjust for the half hour offset: 9:15 IST = 03:45 UTC
-  return Date.UTC(
-    istNow.getUTCFullYear(),
-    istNow.getUTCMonth(),
-    istNow.getUTCDate(),
-    3, 45, 0 // 9:15 AM IST = 3:45 AM UTC
+  // Create today's 9:15 AM IST timestamp and convert to UTC
+  const todayMarketOpen = new Date(
+    istDate.getFullYear(),
+    istDate.getMonth(),
+    istDate.getDate(),
+    9, 15, 0, 0 // 9:15 AM in IST
   );
+  const marketOpenUTC = todayMarketOpen.getTime() - istOffset; // Convert back to UTC
+  
+  console.log(`[Market Open] Today's market open:`, {
+    istTime: new Date(todayMarketOpen.getTime()).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }),
+    utcTime: new Date(marketOpenUTC).toISOString(),
+    marketOpenUTC
+  });
+  
+  return marketOpenUTC;
 }
 
 /**

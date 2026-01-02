@@ -1638,8 +1638,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // For current candle, use the last EMA values since it's not in completed history
         const isCurrentCandle = globalIndex === -1;
         
+        // Debug timestamp conversion
+        const timeInSeconds = Math.floor(candle.timestamp / 1000);
+        const timeLocal = new Date(candle.timestamp).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+        
+        console.log(`[EMA Chart] Candle time mapping:`, {
+          originalTimestamp: candle.timestamp,
+          timeInSeconds,
+          timeLocal,
+          utcTime: new Date(candle.timestamp).toISOString()
+        });
+        
         return {
-          time: Math.floor(candle.timestamp / 1000), // Unix timestamp in seconds
+          time: timeInSeconds, // Unix timestamp in seconds for lightweight-charts
           open: candle.open,
           high: candle.high,
           low: candle.low,
