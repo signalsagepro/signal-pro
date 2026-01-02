@@ -852,6 +852,16 @@ export class RealtimeSignalGenerator {
         return;
       }
 
+      // Check if we have enough candles for accurate EMA
+      const history = this.getCandleHistory(assetInfo.assetId, timeframe);
+      const candleCount = history.candles.length;
+      const MIN_CANDLES_FOR_SIGNALS = 250; // Need at least 250 candles for EMA200 to stabilize
+      
+      if (candleCount < MIN_CANDLES_FOR_SIGNALS) {
+        console.log(`[Realtime Signals] ⚠️ ${assetInfo.symbol} ${timeframe}: Skipping signals - only ${candleCount}/${MIN_CANDLES_FOR_SIGNALS} candles (EMA not yet accurate)`);
+        return;
+      }
+
       // Get previous EMA for crossover detection
       const emaKey = `${assetInfo.assetId}-${timeframe}`;
       const prevEMA = this.previousEMA.get(emaKey);

@@ -1815,6 +1815,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const onCooldown = lastSignalTime && (Date.now() - lastSignalTime) < cooldownMs;
       const cooldownRemaining = lastSignalTime ? cooldownMs - (Date.now() - lastSignalTime) : 0;
       
+      // EMA accuracy warning
+      const totalCandles = history.candles.length;
+      const emaAccurate = totalCandles >= 500;
+      const emaWarning = totalCandles < 200 
+        ? "EMA values are UNRELIABLE - need at least 200 candles" 
+        : totalCandles < 500 
+          ? `EMA may be inaccurate - have ${totalCandles}/500 candles needed for convergence`
+          : null;
+      
       res.json({
         assetId,
         assetName: asset?.name || assetId,
@@ -1832,6 +1841,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         wouldSignal,
         onCooldown: onCooldown || false,
         cooldownRemaining: cooldownRemaining > 0 ? cooldownRemaining : 0,
+        // Diagnostic info
+        totalCandles,
+        emaAccurate,
+        emaWarning,
       });
     } catch (error) {
       console.error("Signal check error:", error);

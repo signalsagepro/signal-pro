@@ -81,6 +81,10 @@ interface SignalCheckResponse {
   wouldSignal: boolean;
   onCooldown: boolean;
   cooldownRemaining?: number;
+  // Diagnostic info
+  totalCandles?: number;
+  emaAccurate?: boolean;
+  emaWarning?: string | null;
 }
 
 export default function DevEmaDebug() {
@@ -510,43 +514,66 @@ export default function DevEmaDebug() {
                   <div className="grid grid-cols-2 gap-2 text-sm">
                     <div className="p-2 bg-slate-100 rounded">
                       <div className="text-slate-500">Price</div>
-                      <div className="font-bold">₹{signalCheck.currentPrice?.toFixed(2)}</div>
+                      <div className="font-bold">
+                        {signalCheck.currentPrice ? `₹${signalCheck.currentPrice.toFixed(2)}` : "N/A"}
+                      </div>
                     </div>
                     <div className="p-2 bg-blue-50 rounded">
                       <div className="text-blue-500">EMA 50</div>
-                      <div className="font-bold text-blue-600">₹{signalCheck.ema50?.toFixed(2)}</div>
+                      <div className="font-bold text-blue-600">
+                        {signalCheck.ema50 ? `₹${signalCheck.ema50.toFixed(2)}` : "N/A"}
+                      </div>
                     </div>
                     <div className="p-2 bg-orange-50 rounded">
                       <div className="text-orange-500">EMA 200</div>
-                      <div className="font-bold text-orange-600">₹{signalCheck.ema200?.toFixed(2)}</div>
+                      <div className="font-bold text-orange-600">
+                        {signalCheck.ema200 ? `₹${signalCheck.ema200.toFixed(2)}` : "N/A"}
+                      </div>
                     </div>
                     <div className="p-2 bg-slate-100 rounded">
                       <div className="text-slate-500">Candle H/L</div>
                       <div className="font-bold text-xs">
-                        {signalCheck.candleHigh?.toFixed(2)} / {signalCheck.candleLow?.toFixed(2)}
+                        {signalCheck.candleHigh ? signalCheck.candleHigh.toFixed(2) : "N/A"} / {signalCheck.candleLow ? signalCheck.candleLow.toFixed(2) : "N/A"}
                       </div>
                     </div>
                   </div>
+                  {(!signalCheck.ema50 || !signalCheck.ema200) && (
+                    <div className="p-2 bg-amber-50 border border-amber-200 rounded text-xs text-amber-700">
+                      EMA values not available yet. Need more candles (50 for EMA50, 200 for EMA200).
+                    </div>
+                  )}
+                  {signalCheck.emaWarning && (
+                    <div className="p-2 bg-red-50 border border-red-200 rounded text-xs text-red-700">
+                      ⚠️ {signalCheck.emaWarning}
+                    </div>
+                  )}
+                  {signalCheck.totalCandles && (
+                    <div className="text-xs text-slate-500">
+                      Total candles: {signalCheck.totalCandles} {signalCheck.emaAccurate ? "✅" : "⚠️"}
+                    </div>
+                  )}
                 </div>
 
                 {/* Distance from EMAs */}
-                <div className="space-y-2">
-                  <h4 className="text-sm font-semibold text-slate-700">Distance from EMAs</h4>
-                  <div className="text-sm space-y-1">
-                    <div className="flex justify-between">
-                      <span>Price to EMA50:</span>
-                      <span className={signalCheck.currentPrice > signalCheck.ema50 ? "text-green-600" : "text-red-600"}>
-                        {((signalCheck.currentPrice - signalCheck.ema50) / signalCheck.ema50 * 100).toFixed(3)}%
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>Price to EMA200:</span>
-                      <span className={signalCheck.currentPrice > signalCheck.ema200 ? "text-green-600" : "text-red-600"}>
-                        {((signalCheck.currentPrice - signalCheck.ema200) / signalCheck.ema200 * 100).toFixed(3)}%
-                      </span>
+                {signalCheck.ema50 && signalCheck.ema200 && signalCheck.currentPrice && (
+                  <div className="space-y-2">
+                    <h4 className="text-sm font-semibold text-slate-700">Distance from EMAs</h4>
+                    <div className="text-sm space-y-1">
+                      <div className="flex justify-between">
+                        <span>Price to EMA50:</span>
+                        <span className={signalCheck.currentPrice > signalCheck.ema50 ? "text-green-600" : "text-red-600"}>
+                          {((signalCheck.currentPrice - signalCheck.ema50) / signalCheck.ema50 * 100).toFixed(3)}%
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Price to EMA200:</span>
+                        <span className={signalCheck.currentPrice > signalCheck.ema200 ? "text-green-600" : "text-red-600"}>
+                          {((signalCheck.currentPrice - signalCheck.ema200) / signalCheck.ema200 * 100).toFixed(3)}%
+                        </span>
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
 
                 {/* Conditions */}
                 <div className="space-y-2">
