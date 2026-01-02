@@ -366,8 +366,9 @@ export class RealtimeSignalGenerator {
 
   /**
    * Detect and fill gaps in candle data with historical data
+   * Public so it can be called from API routes
    */
-  private async backfillMissingData(assetId: string, timeframe: string) {
+  public async backfillMissingData(assetId: string, timeframe: string) {
     const history = this.getCandleHistory(assetId, timeframe);
     
     if (history.candles.length === 0) return;
@@ -381,11 +382,17 @@ export class RealtimeSignalGenerator {
     const timeSinceLastCandle = now - lastCandle.timestamp;
     
     // If gap is more than 2 intervals, backfill
+    // Backfill should work even when market is closed to fill gaps from earlier
     const gapThreshold = intervalMs * 2;
     
-    if (timeSinceLastCandle > gapThreshold && isMarketOpen()) {
+    if (timeSinceLastCandle > gapThreshold) {
       console.log(`[Backfill] Detected ${Math.floor(timeSinceLastCandle / intervalMs)} missing candles for ${assetId} ${timeframe}`);
-      await this.backfillAssetData(assetId, timeframe, lastCandle.timestamp, now);
+      
+      // Calculate proper end time - either now or market close (whichever is earlier)
+      const marketCloseToday = getMarketOpenMs() + (6 * 60 + 15) * 60 * 1000; // 3:30 PM IST = 6h15m after 9:15 AM
+      const backfillEndTime = Math.min(now, marketCloseToday);
+      
+      await this.backfillAssetData(assetId, timeframe, lastCandle.timestamp, backfillEndTime);
     }
   }
 
@@ -552,20 +559,35 @@ export class RealtimeSignalGenerator {
 
   /**
    * Load historical candles into candle history for EMA calculation
+   * Properly merges new candles avoiding duplicates and sorting by timestamp
    */
   private loadHistoricalCandles(assetId: string, timeframe: string, candles: HistoricalCandle[]) {
     const history = this.getCandleHistory(assetId, timeframe);
     
-    // Convert historical candles to our internal format and add to history
+    // Create a map of existing candles by timestamp for deduplication
+    const existingTimestamps = new Set(history.candles.map(c => c.timestamp));
+    
+    // Convert and add only new candles (avoid duplicates)
+    let addedCount = 0;
     for (const candle of candles) {
-      history.candles.push({
-        open: candle.open,
-        high: candle.high,
-        low: candle.low,
-        close: candle.close,
-        timestamp: candle.timestamp.getTime(),
-      });
+      const timestamp = candle.timestamp.getTime();
+      if (!existingTimestamps.has(timestamp)) {
+        history.candles.push({
+          open: candle.open,
+          high: candle.high,
+          low: candle.low,
+          close: candle.close,
+          timestamp,
+        });
+        existingTimestamps.add(timestamp);
+        addedCount++;
+      }
     }
+    
+    console.log(`[LoadHistorical] Added ${addedCount} new candles (${candles.length - addedCount} duplicates skipped)`);
+    
+    // Sort candles by timestamp (important for proper EMA calculation)
+    history.candles.sort((a, b) => a.timestamp - b.timestamp);
 
     // Keep only the most recent candles (matching TradingView's calculation window)
     if (history.candles.length > MIN_CANDLES_FOR_EMA) {
@@ -576,6 +598,8 @@ export class RealtimeSignalGenerator {
     if (history.candles.length > 0) {
       history.lastCandleTime = history.candles[history.candles.length - 1].timestamp;
     }
+    
+    console.log(`[LoadHistorical] Total candles now: ${history.candles.length}, Last candle: ${new Date(history.lastCandleTime).toISOString()}`);
   }
 
   /**

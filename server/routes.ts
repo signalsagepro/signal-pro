@@ -1553,15 +1553,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // AUTO-BACKFILL: Check for gaps and backfill missing data
-      const generator = realtimeSignalGenerator as any;
-      if (generator.backfillMissingData) {
-        try {
-          await generator.backfillMissingData(assetId, timeframe);
-          console.log(`[EMA Chart] Backfill check completed for ${assetId} ${timeframe}`);
-        } catch (error) {
-          console.error(`[EMA Chart] Backfill error:`, error);
-          // Don't fail the request if backfill fails
+      try {
+        console.log(`[EMA Chart] Starting backfill check for ${assetId} ${timeframe}...`);
+        
+        // Get last candle time for logging
+        const lastCandleTime = history.candles.length > 0 
+          ? new Date(history.candles[history.candles.length - 1].timestamp).toISOString()
+          : 'none';
+        console.log(`[EMA Chart] Last candle time: ${lastCandleTime}, Current time: ${new Date().toISOString()}`);
+        
+        await realtimeSignalGenerator.backfillMissingData(assetId, timeframe);
+        
+        // Refresh history after backfill
+        const updatedHistory = candleHistories?.get(key);
+        if (updatedHistory && updatedHistory.candles.length > history.candles.length) {
+          console.log(`[EMA Chart] Backfill added ${updatedHistory.candles.length - history.candles.length} candles`);
+          // Use updated history
+          Object.assign(history, updatedHistory);
         }
+        
+        console.log(`[EMA Chart] Backfill check completed for ${assetId} ${timeframe}`);
+      } catch (error) {
+        console.error(`[EMA Chart] Backfill error:`, error);
+        // Don't fail the request if backfill fails
       }
       
       // Filter candles based on todayOnly flag
