@@ -157,6 +157,12 @@ export default function DevEmaDebug() {
       // Use query param to avoid UUID routing issues
       const response = await fetch(`/api/ema/chart?key=${encodeURIComponent(selectedAsset)}&limit=100`);
       
+      // Check content type before parsing
+      const contentType = response.headers.get("content-type");
+      if (!contentType?.includes("application/json")) {
+        throw new Error(`API returned non-JSON response (${response.status}). Server may need restart.`);
+      }
+      
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.message || "Failed to fetch chart data");

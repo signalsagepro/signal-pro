@@ -74,8 +74,14 @@ export function EmaDebugChart() {
     setError(null);
     
     try {
-      const [assetId, timeframe] = selectedAsset.split("-");
-      const response = await fetch(`/api/ema/chart/${assetId}/${timeframe}?limit=100`);
+      // Use query param to avoid UUID routing issues
+      const response = await fetch(`/api/ema/chart?key=${encodeURIComponent(selectedAsset)}&limit=100`);
+      
+      // Check content type before parsing
+      const contentType = response.headers.get("content-type");
+      if (!contentType?.includes("application/json")) {
+        throw new Error(`API returned non-JSON response. Server may need restart.`);
+      }
       
       if (!response.ok) {
         const errorData = await response.json();
