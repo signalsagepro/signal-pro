@@ -1557,22 +1557,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (todayOnly) {
         // Get today's market open time (9:15 AM IST)
         const now = new Date();
+        
+        // Get IST date components
         const istOffset = 5.5 * 60 * 60 * 1000; // IST is UTC+5:30
-        const istNow = new Date(now.getTime() + istOffset);
-        const todayStart = new Date(Date.UTC(
-          istNow.getUTCFullYear(),
-          istNow.getUTCMonth(),
-          istNow.getUTCDate(),
-          3, 45, 0 // 9:15 AM IST = 3:45 AM UTC
-        ));
-        const todayStartMs = todayStart.getTime();
+        const istTime = now.getTime() + istOffset;
+        const istDate = new Date(istTime);
+        
+        // Create today's 9:15 AM IST timestamp
+        // Note: We need to subtract IST offset to get UTC time
+        const todayStart = new Date(
+          istDate.getFullYear(),
+          istDate.getMonth(),
+          istDate.getDate(),
+          9, 15, 0, 0 // 9:15 AM in IST
+        );
+        const todayStartMs = todayStart.getTime() - istOffset; // Convert back to UTC timestamp
+        
+        // Debug logging
+        console.log(`[EMA Chart] Today filter:`, {
+          now: now.toISOString(),
+          istDate: istDate.toISOString(),
+          todayStart: todayStart.toISOString(),
+          todayStartMs,
+          todayStartLocal: new Date(todayStartMs).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })
+        });
         
         // Filter candles from today's market open
         candles = history.candles.filter((c: any) => c.timestamp >= todayStartMs);
         
+        console.log(`[EMA Chart] Filtered ${candles.length} candles for today from ${history.candles.length} total`);
+        
         // If no candles today, return empty with message
         if (candles.length === 0) {
           candles = history.candles.slice(-10); // Show last 10 as fallback
+          console.log(`[EMA Chart] No candles for today, showing last 10 as fallback`);
         }
       } else {
         // Get last N candles
