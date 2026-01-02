@@ -1651,12 +1651,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const high = latestCandle.high;
       const low = latestCandle.low;
       
-      // Touch detection helper
+      // Touch detection helper - STRICT: candle must actually cross through EMA
       const touchesEMA = (emaValue: number) => {
         const candleCrossed = low <= emaValue && high >= emaValue;
-        const tolerance = emaValue * 0.0005;
-        const closeNear = Math.abs(price - emaValue) <= tolerance;
-        return { touched: candleCrossed || closeNear, candleCrossed, closeNear };
+        const distanceFromLow = ((low - emaValue) / emaValue * 100).toFixed(3);
+        const distanceFromHigh = ((high - emaValue) / emaValue * 100).toFixed(3);
+        return { 
+          touched: candleCrossed, // STRICT: only actual cross counts
+          candleCrossed, 
+          distanceFromLow: `${distanceFromLow}%`,
+          distanceFromHigh: `${distanceFromHigh}%`,
+        };
       };
       
       switch (strategy.type) {
@@ -1664,9 +1669,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const touch50 = touchesEMA(ema50);
           conditions.push({
             name: "Touches EMA50",
-            description: "Candle low/high crosses EMA50 OR close within 0.05%",
+            description: "Candle wick must cross through EMA50 (low <= EMA <= high)",
             met: touch50.touched,
-            value: `candleCrossed=${touch50.candleCrossed}, closeNear=${touch50.closeNear}, low=${low.toFixed(2)}, high=${high.toFixed(2)}, ema50=${ema50.toFixed(2)}`
+            value: `crossed=${touch50.candleCrossed}, low=${low.toFixed(2)} (${touch50.distanceFromLow}), high=${high.toFixed(2)} (${touch50.distanceFromHigh}), ema50=${ema50.toFixed(2)}`
           });
           conditions.push({
             name: "EMA50 > EMA200",
@@ -1687,9 +1692,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const touch200 = touchesEMA(ema200);
           conditions.push({
             name: "Touches EMA200",
-            description: "Candle low/high crosses EMA200 OR close within 0.05%",
+            description: "Candle wick must cross through EMA200 (low <= EMA <= high)",
             met: touch200.touched,
-            value: `candleCrossed=${touch200.candleCrossed}, closeNear=${touch200.closeNear}, low=${low.toFixed(2)}, high=${high.toFixed(2)}, ema200=${ema200.toFixed(2)}`
+            value: `crossed=${touch200.candleCrossed}, low=${low.toFixed(2)} (${touch200.distanceFromLow}), high=${high.toFixed(2)} (${touch200.distanceFromHigh}), ema200=${ema200.toFixed(2)}`
           });
           conditions.push({
             name: "EMA200 > EMA50",
@@ -1712,7 +1717,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             name: "Touches EMA200",
             description: "Candle low/high crosses EMA200 OR close within 0.05%",
             met: touch200.touched,
-            value: `candleCrossed=${touch200.candleCrossed}, closeNear=${touch200.closeNear}`
+            value: `crossed=${touch200.candleCrossed}, lowDist=${touch200.distanceFromLow}, highDist=${touch200.distanceFromHigh}`
           });
           conditions.push({
             name: "EMA50 > EMA200",
@@ -1735,7 +1740,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             name: "Touches EMA200",
             description: "Candle low/high crosses EMA200 OR close within 0.05%",
             met: touch200.touched,
-            value: `candleCrossed=${touch200.candleCrossed}, closeNear=${touch200.closeNear}`
+            value: `crossed=${touch200.candleCrossed}, lowDist=${touch200.distanceFromLow}, highDist=${touch200.distanceFromHigh}`
           });
           conditions.push({
             name: "EMA50 > EMA200",
@@ -1758,7 +1763,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             name: "Touches EMA200",
             description: "Candle low/high crosses EMA200 OR close within 0.05%",
             met: touch200.touched,
-            value: `candleCrossed=${touch200.candleCrossed}, closeNear=${touch200.closeNear}`
+            value: `crossed=${touch200.candleCrossed}, lowDist=${touch200.distanceFromLow}, highDist=${touch200.distanceFromHigh}`
           });
           conditions.push({
             name: "EMA200 > EMA50",
@@ -1781,7 +1786,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             name: "Touches EMA200",
             description: "Candle low/high crosses EMA200 OR close within 0.05%",
             met: touch200.touched,
-            value: `candleCrossed=${touch200.candleCrossed}, closeNear=${touch200.closeNear}`
+            value: `crossed=${touch200.candleCrossed}, lowDist=${touch200.distanceFromLow}, highDist=${touch200.distanceFromHigh}`
           });
           conditions.push({
             name: "EMA50 > EMA200",
@@ -1849,6 +1854,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Signal check error:", error);
       res.status(500).json({ error: "Failed to check signal" });
+    }
+  });
+
+  // Trigger historical data fetch for all assets
+  app.post("/api/ema/fetch-historical", async (req, res) => {
+    try {
+      console.log("[API] Manual historical data fetch triggered");
+      
+      // Get all enabled assets
+      const assets = await storage.getAssets();
+      const enabledAssets = assets.filter(a => a.enabled);
+      
+      if (enabledAssets.length === 0) {
+        res.json({ success: false, message: "No enabled assets found" });
+        return;
+      }
+      
+      // Trigger the fetch in background
+      const generator = realtimeSignalGenerator as any;
+      if (generator.fetchHistoricalDataInBackground) {
+        // Get instrument tokens
+        const tokens = generator.getInstrumentTokens ? 
+          generator.getInstrumentTokens(enabledAssets) : [];
+        
+        if (tokens.length === 0) {
+          res.json({ success: false, message: "No instrument tokens found" });
+          return;
+        }
+        
+        // Start fetch in background
+        generator.fetchHistoricalDataInBackground(enabledAssets, tokens).catch((err: any) => {
+          console.error("[API] Historical fetch error:", err);
+        });
+        
+        res.json({ 
+          success: true, 
+          message: `Started fetching historical data for ${enabledAssets.length} assets`,
+          assetsCount: enabledAssets.length,
+          tokensCount: tokens.length,
+        });
+      } else {
+        res.json({ success: false, message: "Historical fetch not available" });
+      }
+    } catch (error) {
+      console.error("[API] fetch-historical error:", error);
+      res.status(500).json({ error: "Failed to trigger historical fetch" });
     }
   });
 

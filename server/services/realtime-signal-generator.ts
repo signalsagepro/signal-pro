@@ -7,7 +7,9 @@ import type { SignalBroadcastCallback } from "./market-data-generator";
 
 // Minimum candles required for accurate EMA matching TradingView
 // TradingView uses ALL historical data, so we need enough for EMA 200 to converge
-const MIN_CANDLES_FOR_EMA = 500;
+// For EMA200 to be accurate, we need ~3-5x the period = 600-1000 candles
+// We'll store up to 2000 candles for best accuracy
+const MIN_CANDLES_FOR_EMA = 2000;
 
 /**
  * Candle data structure for aggregating ticks
@@ -130,6 +132,42 @@ export class RealtimeSignalGenerator {
     this.broadcastCallback = callback;
   }
 
+  /**
+   * Auto-connect to Zerodha on server startup if already configured
+   */
+  private async autoConnectOnStartup() {
+    try {
+      // Wait a bit for server to fully initialize
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      
+      console.log("[Realtime Signals] 🚀 Auto-connect: Checking for configured brokers...");
+      
+      const configs = await storage.getBrokerConfigs();
+      const zerodhaConfig = configs.find(c => c.name === "zerodha" && c.connected);
+      
+      if (!zerodhaConfig) {
+        console.log("[Realtime Signals] Auto-connect: No connected Zerodha config found");
+        return;
+      }
+      
+      const metadata = zerodhaConfig.metadata as Record<string, any> || {};
+      if (!metadata.accessToken) {
+        console.log("[Realtime Signals] Auto-connect: No access token found");
+        return;
+      }
+      
+      console.log("[Realtime Signals] 🚀 Auto-connect: Found Zerodha config, connecting...");
+      const connected = await this.connectZerodha();
+      
+      if (connected) {
+        console.log("[Realtime Signals] ✅ Auto-connect: Successfully connected to Zerodha!");
+        console.log("[Realtime Signals] 📊 Historical data will be fetched automatically...");
+      }
+    } catch (error) {
+      console.error("[Realtime Signals] Auto-connect error:", error);
+    }
+  }
+
   getAssetTokenMap() {
     return this.assetTokenMap;
   }
@@ -157,6 +195,9 @@ export class RealtimeSignalGenerator {
       console.log(`[Realtime Signals] ${data.broker} WebSocket connected`);
       await this.subscribeToAssets(data.broker);
     });
+
+    // AUTO-START: Try to connect to Zerodha if already configured
+    this.autoConnectOnStartup();
 
     brokerWebSocket.on("disconnected", (data: any) => {
       console.log(`[Realtime Signals] ${data.broker} WebSocket disconnected`);
@@ -332,10 +373,10 @@ export class RealtimeSignalGenerator {
   }
 
   /**
-   * Background historical data fetcher with optimized batching
+   * Background historical data fetcher with optimized batching (public for API access)
    * Processes assets in parallel batches while respecting rate limits
    */
-  private async fetchHistoricalDataInBackground(assets: any[], instrumentTokens: number[]) {
+  public async fetchHistoricalDataInBackground(assets: any[], instrumentTokens: number[]) {
     try {
       const configs = await storage.getBrokerConfigs();
       const zerodhaConfig = configs.find(c => c.name === "zerodha" && c.connected);
@@ -362,9 +403,13 @@ export class RealtimeSignalGenerator {
       console.log(`[Realtime Signals] 📊 Starting background historical data fetch for ${totalAssets} assets...`);
 
       // Calculate date range for historical data
+      // Zerodha allows up to 60 days for intraday data
+      // For accurate EMA200, we need ~1000+ data points for proper convergence
       const to = new Date();
-      const from5m = new Date(to.getTime() - 7 * 24 * 60 * 60 * 1000); // 7 days back for 5m
-      const from15m = new Date(to.getTime() - 30 * 24 * 60 * 60 * 1000); // 30 days back for 15m
+      // 5m candles: 60 days = ~4500 candles (75 candles/day * 60 days)
+      const from5m = new Date(to.getTime() - 60 * 24 * 60 * 60 * 1000); // 60 days back for 5m
+      // 15m candles: 100 days = ~2500 candles (25 candles/day * 100 days)
+      const from15m = new Date(to.getTime() - 100 * 24 * 60 * 60 * 1000); // 100 days back for 15m
 
       let successCount = 0;
       let failCount = 0;
@@ -468,10 +513,10 @@ export class RealtimeSignalGenerator {
   }
 
   /**
-   * Get instrument tokens for assets
+   * Get instrument tokens for assets (public for API access)
    * Priority: 1) Asset's instrumentToken field, 2) Known tokens lookup, 3) Skip
    */
-  private getInstrumentTokens(assets: any[]): number[] {
+  public getInstrumentTokens(assets: any[]): number[] {
     // Comprehensive instrument tokens for Indian markets
     // These are NSE/BSE equity and index tokens - NOT futures tokens
     const knownTokens: Record<string, number> = {
@@ -855,7 +900,7 @@ export class RealtimeSignalGenerator {
       // Check if we have enough candles for accurate EMA
       const history = this.getCandleHistory(assetInfo.assetId, timeframe);
       const candleCount = history.candles.length;
-      const MIN_CANDLES_FOR_SIGNALS = 250; // Need at least 250 candles for EMA200 to stabilize
+      const MIN_CANDLES_FOR_SIGNALS = 500; // Need at least 500 candles for EMA200 to stabilize properly
       
       if (candleCount < MIN_CANDLES_FOR_SIGNALS) {
         console.log(`[Realtime Signals] ⚠️ ${assetInfo.symbol} ${timeframe}: Skipping signals - only ${candleCount}/${MIN_CANDLES_FOR_SIGNALS} candles (EMA not yet accurate)`);

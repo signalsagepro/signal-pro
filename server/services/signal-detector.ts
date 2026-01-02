@@ -19,22 +19,27 @@ export interface MarketData {
 
 /**
  * Check if price "touches" EMA
- * STRICT: Candle low/high must actually cross through EMA, OR close within 0.05%
+ * VERY STRICT: Candle wick must ACTUALLY cross through EMA line
+ * Close proximity alone is NOT enough - we need actual touch
  */
 function touchesEMA(price: number, low: number, high: number, ema: number): boolean {
-  // Candle range crossed through EMA (low went below, high went above)
+  // STRICT CHECK: Candle range must actually cross through EMA
+  // This means low was at or below EMA AND high was at or above EMA
   const candleCrossedEMA = low <= ema && high >= ema;
   
-  // Close is very close to EMA (within 0.05% - stricter tolerance)
-  const tolerance = ema * 0.0005; // 0.05% tolerance (was 0.1%)
-  const closeNearEMA = Math.abs(price - ema) <= tolerance;
+  // Calculate distances for logging
+  const distanceFromClose = ((price - ema) / ema * 100);
+  const distanceFromLow = ((low - ema) / ema * 100);
+  const distanceFromHigh = ((high - ema) / ema * 100);
   
-  // Calculate distance from price to EMA for logging
-  const distancePercent = ((price - ema) / ema * 100).toFixed(3);
+  console.log(`[touchesEMA] STRICT CHECK:`);
+  console.log(`  Price=${price.toFixed(2)}, Low=${low.toFixed(2)}, High=${high.toFixed(2)}, EMA=${ema.toFixed(2)}`);
+  console.log(`  Distance: close=${distanceFromClose.toFixed(3)}%, low=${distanceFromLow.toFixed(3)}%, high=${distanceFromHigh.toFixed(3)}%`);
+  console.log(`  Candle crossed EMA (low<=ema<=high): ${candleCrossedEMA}`);
   
-  console.log(`[touchesEMA] price=${price.toFixed(2)}, low=${low.toFixed(2)}, high=${high.toFixed(2)}, ema=${ema.toFixed(2)}, distance=${distancePercent}%, candleCrossed=${candleCrossedEMA}, closeNear=${closeNearEMA}`);
-  
-  return candleCrossedEMA || closeNearEMA;
+  // REMOVED: closeNearEMA tolerance - too many false positives
+  // Only true touch counts now
+  return candleCrossedEMA;
 }
 
 /**

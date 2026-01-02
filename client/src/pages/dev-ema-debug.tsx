@@ -478,17 +478,38 @@ export default function DevEmaDebug() {
               </div>
             )}
 
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => {
-                fetchDebugStatus();
-                fetchAvailableAssets();
-              }}
-            >
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Refresh Status
-            </Button>
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => {
+                  fetchDebugStatus();
+                  fetchAvailableAssets();
+                }}
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Refresh Status
+              </Button>
+              <Button 
+                variant="default" 
+                size="sm"
+                onClick={async () => {
+                  try {
+                    const res = await fetch("/api/ema/fetch-historical", { method: "POST" });
+                    const data = await res.json();
+                    alert(data.message || "Historical fetch triggered");
+                    setTimeout(() => {
+                      fetchDebugStatus();
+                      fetchAvailableAssets();
+                    }, 2000);
+                  } catch (err) {
+                    alert("Failed to trigger historical fetch");
+                  }
+                }}
+              >
+                📊 Fetch Historical Data
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}
