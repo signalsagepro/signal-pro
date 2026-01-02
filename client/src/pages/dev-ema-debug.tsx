@@ -95,6 +95,18 @@ export default function DevEmaDebug() {
   const [signalCheck, setSignalCheck] = useState<SignalCheckResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [debugStatus, setDebugStatus] = useState<any>(null);
+
+  // Fetch debug status
+  const fetchDebugStatus = async () => {
+    try {
+      const response = await fetch("/api/ema/debug/status");
+      const data = await response.json();
+      setDebugStatus(data);
+    } catch (err) {
+      console.error("Failed to fetch debug status:", err);
+    }
+  };
 
   // Fetch available assets
   const fetchAvailableAssets = async () => {
@@ -142,8 +154,8 @@ export default function DevEmaDebug() {
     setError(null);
     
     try {
-      const { assetId, timeframe } = parseAssetKey(selectedAsset);
-      const response = await fetch(`/api/ema/chart/${assetId}/${timeframe}?limit=100`);
+      // Use query param to avoid UUID routing issues
+      const response = await fetch(`/api/ema/chart?key=${encodeURIComponent(selectedAsset)}&limit=100`);
       
       if (!response.ok) {
         const errorData = await response.json();
@@ -165,8 +177,8 @@ export default function DevEmaDebug() {
     if (!selectedAsset || !selectedStrategy) return;
     
     try {
-      const { assetId, timeframe } = parseAssetKey(selectedAsset);
-      const response = await fetch(`/api/ema/signal-check/${assetId}/${timeframe}/${selectedStrategy}`);
+      // Use query params to avoid UUID routing issues
+      const response = await fetch(`/api/ema/signal-check?key=${encodeURIComponent(selectedAsset)}&strategyId=${selectedStrategy}`);
       
       if (!response.ok) {
         const errorData = await response.json();
@@ -283,10 +295,12 @@ export default function DevEmaDebug() {
 
   // Load data on mount
   useEffect(() => {
+    fetchDebugStatus();
     fetchAvailableAssets();
     fetchStrategies();
     
     const interval = setInterval(() => {
+      fetchDebugStatus();
       fetchAvailableAssets();
     }, 30000);
     return () => clearInterval(interval);
@@ -398,6 +412,75 @@ export default function DevEmaDebug() {
         <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-md text-red-500">
           {error}
         </div>
+      )}
+
+      {/* Debug Status Panel - shows when no assets available */}
+      {availableAssets.length === 0 && debugStatus && (
+        <Card className="border-amber-200 bg-amber-50">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-amber-700">
+              <AlertCircle className="h-5 w-5" />
+              Signal Generator Status
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+              <div className="p-2 bg-white rounded border">
+                <div className="text-slate-500">Initialized</div>
+                <div className={`font-bold ${debugStatus.isInitialized ? "text-green-600" : "text-red-600"}`}>
+                  {debugStatus.isInitialized ? "Yes" : "No"}
+                </div>
+              </div>
+              <div className="p-2 bg-white rounded border">
+                <div className="text-slate-500">Candle Histories</div>
+                <div className="font-bold">{debugStatus.candleHistoriesSize}</div>
+              </div>
+              <div className="p-2 bg-white rounded border">
+                <div className="text-slate-500">Asset Token Map</div>
+                <div className="font-bold">{debugStatus.assetTokenMapSize}</div>
+              </div>
+              <div className="p-2 bg-white rounded border">
+                <div className="text-slate-500">Assets in DB</div>
+                <div className="font-bold">{debugStatus.totalAssetsInDb}</div>
+              </div>
+            </div>
+            
+            {debugStatus.candleHistoriesSize === 0 && (
+              <div className="p-3 bg-amber-100 rounded text-amber-800 text-sm">
+                <strong>No candle data yet.</strong> This could mean:
+                <ul className="list-disc ml-5 mt-2">
+                  <li>Zerodha WebSocket is not connected</li>
+                  <li>Market is closed (IST 9:15 AM - 3:30 PM)</li>
+                  <li>No ticks have been received yet</li>
+                  <li>Signal generator hasn't been initialized</li>
+                </ul>
+              </div>
+            )}
+
+            {debugStatus.assetsInDb?.length > 0 && (
+              <div className="text-sm">
+                <strong>Assets in Database:</strong>
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {debugStatus.assetsInDb.map((a: any) => (
+                    <Badge key={a.id} variant="outline">{a.symbol}</Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => {
+                fetchDebugStatus();
+                fetchAvailableAssets();
+              }}
+            >
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Refresh Status
+            </Button>
+          </CardContent>
+        </Card>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

@@ -1522,14 +1522,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ============ EMA DEBUG CHART API ============
-  app.get("/api/ema/chart/:assetId/:timeframe", async (req, res) => {
+  // Use query param for key to avoid UUID routing issues
+  app.get("/api/ema/chart", async (req, res) => {
     try {
-      const { assetId, timeframe } = req.params;
+      const key = req.query.key as string;
       const limit = parseInt(req.query.limit as string) || 100;
+      
+      if (!key) {
+        res.status(400).json({ error: "key query parameter required" });
+        return;
+      }
+      
+      // Parse key: format is "uuid-timeframe" where uuid has dashes
+      const parts = key.split('-');
+      const timeframe = parts.pop()!;
+      const assetId = parts.join('-');
       
       // Get candle history from realtime signal generator
       const candleHistories = (realtimeSignalGenerator as any).candleHistories;
-      const key = `${assetId}-${timeframe}`;
       const history = candleHistories?.get(key);
       
       if (!history || !history.candles || history.candles.length === 0) {
@@ -1589,13 +1599,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Check signal conditions for a specific asset/timeframe/strategy
-  app.get("/api/ema/signal-check/:assetId/:timeframe/:strategyId", async (req, res) => {
+  app.get("/api/ema/signal-check", async (req, res) => {
     try {
-      const { assetId, timeframe, strategyId } = req.params;
+      const key = req.query.key as string;
+      const strategyId = req.query.strategyId as string;
+      
+      if (!key || !strategyId) {
+        res.status(400).json({ error: "key and strategyId query parameters required" });
+        return;
+      }
+      
+      // Parse key: format is "uuid-timeframe" where uuid has dashes
+      const parts = key.split('-');
+      const timeframe = parts.pop()!;
+      const assetId = parts.join('-');
       
       // Get candle history
       const candleHistories = (realtimeSignalGenerator as any).candleHistories;
-      const key = `${assetId}-${timeframe}`;
       const history = candleHistories?.get(key);
       
       if (!history || !history.candles || history.candles.length === 0) {
@@ -1819,23 +1839,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Debug: Get signal generator status
+  app.get("/api/ema/debug/status", async (req, res) => {
+    try {
+      const generator = realtimeSignalGenerator as any;
+      const candleHistories = generator.candleHistories;
+      const assetTokenMap = generator.assetTokenMap;
+      const isInitialized = generator.isInitialized;
+      
+      // Get all assets from database
+      const allAssets = await storage.getAssets();
+      
+      res.json({
+        isInitialized: isInitialized || false,
+        candleHistoriesSize: candleHistories?.size || 0,
+        assetTokenMapSize: assetTokenMap?.size || 0,
+        totalAssetsInDb: allAssets.length,
+        candleHistoryKeys: candleHistories ? Array.from(candleHistories.keys()) : [],
+        assetTokenMapKeys: assetTokenMap ? Array.from(assetTokenMap.keys()) : [],
+        assetsInDb: allAssets.map(a => ({ id: a.id, symbol: a.symbol, name: a.name })),
+      });
+    } catch (error) {
+      console.error("[API] debug/status error:", error);
+      res.status(500).json({ error: "Failed to get status" });
+    }
+  });
+
   // Get list of available assets with candle data
   app.get("/api/ema/available-assets", async (req, res) => {
     try {
       const candleHistories = (realtimeSignalGenerator as any).candleHistories;
       
+      console.log("[API] available-assets: candleHistories exists:", !!candleHistories);
+      
       if (!candleHistories) {
-        res.json({ assets: [] });
+        res.json({ assets: [], debug: "candleHistories is null/undefined" });
         return;
       }
+      
+      console.log("[API] available-assets: candleHistories size:", candleHistories.size);
       
       const availableAssets: any[] = [];
       
       for (const [key, history] of candleHistories.entries()) {
-        const [assetId, timeframe] = key.split('-');
-        const candleCount = (history as any).candles?.length || 0;
+        // Key format is "uuid-timeframe", UUID contains dashes, timeframe is last part
+        const parts = key.split('-');
+        const timeframe = parts.pop()!; // Last part is timeframe (5m, 15m)
+        const assetId = parts.join('-'); // Rest is the UUID
         
-        if (candleCount > 0) {
+        const candleCount = (history as any).candles?.length || 0;
+        const currentCandle = (history as any).currentCandle;
+        
+        console.log(`[API] available-assets: ${key} -> assetId=${assetId}, timeframe=${timeframe}, candles=${candleCount}, hasCurrentCandle=${!!currentCandle}`);
+        
+        // Show assets even with just a current candle (no closed candles yet)
+        if (candleCount > 0 || currentCandle) {
           const asset = await storage.getAsset(assetId);
           availableAssets.push({
             key,
@@ -1843,13 +1901,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
             assetName: asset?.name || assetId,
             symbol: asset?.symbol || assetId,
             timeframe,
-            candleCount,
+            candleCount: candleCount + (currentCandle ? 1 : 0),
           });
         }
       }
       
-      res.json({ assets: availableAssets });
+      console.log("[API] available-assets: returning", availableAssets.length, "assets");
+      
+      res.json({ 
+        assets: availableAssets,
+        debug: {
+          candleHistoriesSize: candleHistories.size,
+          totalAssetsFound: availableAssets.length
+        }
+      });
     } catch (error) {
+      console.error("[API] available-assets error:", error);
       res.status(500).json({ error: "Failed to get available assets" });
     }
   });
