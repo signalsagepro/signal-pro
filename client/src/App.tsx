@@ -22,6 +22,7 @@ import Users from "@/pages/users";
 import DevLogs from "@/pages/dev-logs";
 import DevStrategyBuilder from "@/pages/dev-strategy-builder";
 import DevDashboardSettings from "@/pages/dev-dashboard-settings";
+import DevEmaDebug from "@/pages/dev-ema-debug";
 import Charts from "@/pages/charts";
 
 function Router({ devMode, superDevMode, isAdmin }: { devMode: boolean; superDevMode: boolean; isAdmin: boolean }) {
@@ -37,6 +38,7 @@ function Router({ devMode, superDevMode, isAdmin }: { devMode: boolean; superDev
       {isAdmin && <Route path="/users" component={Users} />}
       {devMode && isAdmin && <Route path="/dev/logs" component={DevLogs} />}
       {devMode && isAdmin && <Route path="/dev/dashboard-settings" component={DevDashboardSettings} />}
+      {devMode && isAdmin && <Route path="/dev/ema-debug" component={DevEmaDebug} />}
       {superDevMode && isAdmin && <Route path="/dev/strategy-builder" component={DevStrategyBuilder} />}
       <Route component={NotFound} />
     </Switch>

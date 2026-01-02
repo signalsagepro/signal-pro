@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
   SelectContent,
@@ -18,8 +19,10 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Lock,
+  Bug,
 } from "lucide-react";
 import { TradingChart } from "@/components/trading-chart";
+import { EmaDebugChart } from "@/components/EmaDebugChart";
 import { useDashboardConfig } from "@/hooks/use-dashboard-config";
 
 // NSE F&O Stocks (Top stocks available for Futures & Options trading)
@@ -189,6 +192,25 @@ export default function Charts() {
           </Button>
         </div>
       </div>
+
+      {/* Tabs for Charts and EMA Debug */}
+      <Tabs defaultValue="charts" className="w-full">
+        <TabsList className="grid w-full max-w-md grid-cols-2">
+          <TabsTrigger value="charts" className="flex items-center gap-2">
+            <LineChart className="h-4 w-4" />
+            Live Charts
+          </TabsTrigger>
+          <TabsTrigger value="ema-debug" className="flex items-center gap-2">
+            <Bug className="h-4 w-4" />
+            EMA Debug
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="ema-debug" className="mt-6">
+          <EmaDebugChart />
+        </TabsContent>
+
+        <TabsContent value="charts" className="mt-6 space-y-6">
       
       {/* Toolbar */}
       <Card className="shadow-md border border-emerald-100">
@@ -298,6 +320,8 @@ export default function Charts() {
           </CardContent>
         </Card>
       )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

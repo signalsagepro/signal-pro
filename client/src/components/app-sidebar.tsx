@@ -230,6 +230,18 @@ export function AppSidebar({ devMode, superDevMode, onLogoClick }: AppSidebarPro
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={location === "/dev/ema-debug"}
+                    data-testid="link-dev-ema-debug"
+                  >
+                    <Link href="/dev/ema-debug">
+                      <Code2 className="h-4 w-4" />
+                      <span>EMA Signal Debug</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
                 {superDevMode && (
                   <SidebarMenuItem>
                     <SidebarMenuButton

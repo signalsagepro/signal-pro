@@ -1521,6 +1521,339 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ============ EMA DEBUG CHART API ============
+  app.get("/api/ema/chart/:assetId/:timeframe", async (req, res) => {
+    try {
+      const { assetId, timeframe } = req.params;
+      const limit = parseInt(req.query.limit as string) || 100;
+      
+      // Get candle history from realtime signal generator
+      const candleHistories = (realtimeSignalGenerator as any).candleHistories;
+      const key = `${assetId}-${timeframe}`;
+      const history = candleHistories?.get(key);
+      
+      if (!history || !history.candles || history.candles.length === 0) {
+        res.status(404).json({ 
+          error: "No candle data found",
+          message: `No data for asset ${assetId} with timeframe ${timeframe}`,
+          availableKeys: candleHistories ? Array.from(candleHistories.keys()) : []
+        });
+        return;
+      }
+      
+      // Get last N candles
+      const candles = history.candles.slice(-limit);
+      
+      // Calculate EMA 50 and EMA 200 for the candles
+      const { emaCalculator } = await import("./services/ema-calculator");
+      const allCandles = history.candles;
+      const closePrices = allCandles.map((c: any) => c.close);
+      
+      const ema50Values = emaCalculator.calculateEMA(closePrices, 50);
+      const ema200Values = emaCalculator.calculateEMA(closePrices, 200);
+      
+      // Get the last N values aligned with candles
+      const startIndex = allCandles.length - limit;
+      
+      const chartData = candles.map((candle: any, i: number) => {
+        const globalIndex = startIndex + i;
+        return {
+          time: Math.floor(candle.timestamp / 1000), // Unix timestamp in seconds
+          open: candle.open,
+          high: candle.high,
+          low: candle.low,
+          close: candle.close,
+          ema50: isNaN(ema50Values[globalIndex]) ? null : ema50Values[globalIndex],
+          ema200: isNaN(ema200Values[globalIndex]) ? null : ema200Values[globalIndex],
+        };
+      });
+      
+      // Get asset info
+      const asset = await storage.getAsset(assetId);
+      
+      res.json({
+        assetId,
+        assetName: asset?.name || assetId,
+        symbol: asset?.symbol || assetId,
+        timeframe,
+        totalCandles: allCandles.length,
+        returnedCandles: chartData.length,
+        latestEma50: ema50Values[ema50Values.length - 1],
+        latestEma200: ema200Values[ema200Values.length - 1],
+        data: chartData,
+      });
+    } catch (error) {
+      console.error("EMA chart error:", error);
+      res.status(500).json({ error: "Failed to get chart data" });
+    }
+  });
+
+  // Check signal conditions for a specific asset/timeframe/strategy
+  app.get("/api/ema/signal-check/:assetId/:timeframe/:strategyId", async (req, res) => {
+    try {
+      const { assetId, timeframe, strategyId } = req.params;
+      
+      // Get candle history
+      const candleHistories = (realtimeSignalGenerator as any).candleHistories;
+      const key = `${assetId}-${timeframe}`;
+      const history = candleHistories?.get(key);
+      
+      if (!history || !history.candles || history.candles.length === 0) {
+        res.status(404).json({ error: "No candle data found" });
+        return;
+      }
+      
+      // Get strategy
+      const strategy = await storage.getStrategy(strategyId);
+      if (!strategy) {
+        res.status(404).json({ error: "Strategy not found" });
+        return;
+      }
+      
+      // Get asset
+      const asset = await storage.getAsset(assetId);
+      
+      // Calculate EMAs
+      const { emaCalculator } = await import("./services/ema-calculator");
+      const closePrices = history.candles.map((c: any) => c.close);
+      const ema50Values = emaCalculator.calculateEMA(closePrices, 50);
+      const ema200Values = emaCalculator.calculateEMA(closePrices, 200);
+      
+      const latestCandle = history.candles[history.candles.length - 1];
+      const ema50 = ema50Values[ema50Values.length - 1];
+      const ema200 = ema200Values[ema200Values.length - 1];
+      
+      // Check signal conditions based on strategy type
+      const conditions: any[] = [];
+      let wouldSignal = false;
+      
+      const price = latestCandle.close;
+      const high = latestCandle.high;
+      const low = latestCandle.low;
+      
+      // Touch detection helper
+      const touchesEMA = (emaValue: number) => {
+        const candleCrossed = low <= emaValue && high >= emaValue;
+        const tolerance = emaValue * 0.0005;
+        const closeNear = Math.abs(price - emaValue) <= tolerance;
+        return { touched: candleCrossed || closeNear, candleCrossed, closeNear };
+      };
+      
+      switch (strategy.type) {
+        case "15m_above_50_bullish": {
+          const touch50 = touchesEMA(ema50);
+          conditions.push({
+            name: "Touches EMA50",
+            description: "Candle low/high crosses EMA50 OR close within 0.05%",
+            met: touch50.touched,
+            value: `candleCrossed=${touch50.candleCrossed}, closeNear=${touch50.closeNear}, low=${low.toFixed(2)}, high=${high.toFixed(2)}, ema50=${ema50.toFixed(2)}`
+          });
+          conditions.push({
+            name: "EMA50 > EMA200",
+            description: "Uptrend condition",
+            met: ema50 > ema200,
+            value: `ema50=${ema50.toFixed(2)}, ema200=${ema200.toFixed(2)}`
+          });
+          conditions.push({
+            name: "Price > EMA50",
+            description: "Bounced up from EMA50",
+            met: price > ema50,
+            value: `price=${price.toFixed(2)}, ema50=${ema50.toFixed(2)}`
+          });
+          wouldSignal = touch50.touched && ema50 > ema200 && price > ema50;
+          break;
+        }
+        case "5m_above_200_reversal": {
+          const touch200 = touchesEMA(ema200);
+          conditions.push({
+            name: "Touches EMA200",
+            description: "Candle low/high crosses EMA200 OR close within 0.05%",
+            met: touch200.touched,
+            value: `candleCrossed=${touch200.candleCrossed}, closeNear=${touch200.closeNear}, low=${low.toFixed(2)}, high=${high.toFixed(2)}, ema200=${ema200.toFixed(2)}`
+          });
+          conditions.push({
+            name: "EMA200 > EMA50",
+            description: "Downtrend (reversal setup)",
+            met: ema200 > ema50,
+            value: `ema200=${ema200.toFixed(2)}, ema50=${ema50.toFixed(2)}`
+          });
+          conditions.push({
+            name: "Price > EMA200",
+            description: "Closed above EMA200 (reversal)",
+            met: price > ema200,
+            value: `price=${price.toFixed(2)}, ema200=${ema200.toFixed(2)}`
+          });
+          wouldSignal = touch200.touched && ema200 > ema50 && price > ema200;
+          break;
+        }
+        case "5m_pullback_to_200": {
+          const touch200 = touchesEMA(ema200);
+          conditions.push({
+            name: "Touches EMA200",
+            description: "Candle low/high crosses EMA200 OR close within 0.05%",
+            met: touch200.touched,
+            value: `candleCrossed=${touch200.candleCrossed}, closeNear=${touch200.closeNear}`
+          });
+          conditions.push({
+            name: "EMA50 > EMA200",
+            description: "Uptrend condition",
+            met: ema50 > ema200,
+            value: `ema50=${ema50.toFixed(2)}, ema200=${ema200.toFixed(2)}`
+          });
+          conditions.push({
+            name: "Price > EMA200",
+            description: "Bounced up from EMA200",
+            met: price > ema200,
+            value: `price=${price.toFixed(2)}, ema200=${ema200.toFixed(2)}`
+          });
+          wouldSignal = touch200.touched && ema50 > ema200 && price > ema200;
+          break;
+        }
+        case "5m_below_200_bearish": {
+          const touch200 = touchesEMA(ema200);
+          conditions.push({
+            name: "Touches EMA200",
+            description: "Candle low/high crosses EMA200 OR close within 0.05%",
+            met: touch200.touched,
+            value: `candleCrossed=${touch200.candleCrossed}, closeNear=${touch200.closeNear}`
+          });
+          conditions.push({
+            name: "EMA50 > EMA200",
+            description: "Was in uptrend (breakdown setup)",
+            met: ema50 > ema200,
+            value: `ema50=${ema50.toFixed(2)}, ema200=${ema200.toFixed(2)}`
+          });
+          conditions.push({
+            name: "Price < EMA200",
+            description: "Closed below EMA200 (breakdown)",
+            met: price < ema200,
+            value: `price=${price.toFixed(2)}, ema200=${ema200.toFixed(2)}`
+          });
+          wouldSignal = touch200.touched && ema50 > ema200 && price < ema200;
+          break;
+        }
+        case "5m_touch_200_downtrend": {
+          const touch200 = touchesEMA(ema200);
+          conditions.push({
+            name: "Touches EMA200",
+            description: "Candle low/high crosses EMA200 OR close within 0.05%",
+            met: touch200.touched,
+            value: `candleCrossed=${touch200.candleCrossed}, closeNear=${touch200.closeNear}`
+          });
+          conditions.push({
+            name: "EMA200 > EMA50",
+            description: "Downtrend condition",
+            met: ema200 > ema50,
+            value: `ema200=${ema200.toFixed(2)}, ema50=${ema50.toFixed(2)}`
+          });
+          conditions.push({
+            name: "Price < EMA200",
+            description: "Rejected down from EMA200",
+            met: price < ema200,
+            value: `price=${price.toFixed(2)}, ema200=${ema200.toFixed(2)}`
+          });
+          wouldSignal = touch200.touched && ema200 > ema50 && price < ema200;
+          break;
+        }
+        case "15m_below_200_breakdown": {
+          const touch200 = touchesEMA(ema200);
+          conditions.push({
+            name: "Touches EMA200",
+            description: "Candle low/high crosses EMA200 OR close within 0.05%",
+            met: touch200.touched,
+            value: `candleCrossed=${touch200.candleCrossed}, closeNear=${touch200.closeNear}`
+          });
+          conditions.push({
+            name: "EMA50 > EMA200",
+            description: "Was in uptrend (breakdown setup)",
+            met: ema50 > ema200,
+            value: `ema50=${ema50.toFixed(2)}, ema200=${ema200.toFixed(2)}`
+          });
+          conditions.push({
+            name: "Price < EMA200",
+            description: "Broke down below EMA200",
+            met: price < ema200,
+            value: `price=${price.toFixed(2)}, ema200=${ema200.toFixed(2)}`
+          });
+          wouldSignal = touch200.touched && ema50 > ema200 && price < ema200;
+          break;
+        }
+        default:
+          conditions.push({
+            name: "Unknown Strategy",
+            description: `Strategy type ${strategy.type} not recognized`,
+            met: false,
+            value: ""
+          });
+      }
+      
+      // Check cooldown
+      const cooldownKey = `${assetId}-${strategyId}-${timeframe}`;
+      const recentSignals = (signalDetector as any).recentSignals;
+      const lastSignalTime = recentSignals?.get(cooldownKey);
+      const cooldownMs = 30 * 60 * 1000;
+      const onCooldown = lastSignalTime && (Date.now() - lastSignalTime) < cooldownMs;
+      const cooldownRemaining = lastSignalTime ? cooldownMs - (Date.now() - lastSignalTime) : 0;
+      
+      res.json({
+        assetId,
+        assetName: asset?.name || assetId,
+        symbol: asset?.symbol || assetId,
+        timeframe,
+        strategyId,
+        strategyName: strategy.name,
+        strategyType: strategy.type,
+        currentPrice: price,
+        ema50,
+        ema200,
+        candleHigh: high,
+        candleLow: low,
+        conditions,
+        wouldSignal,
+        onCooldown: onCooldown || false,
+        cooldownRemaining: cooldownRemaining > 0 ? cooldownRemaining : 0,
+      });
+    } catch (error) {
+      console.error("Signal check error:", error);
+      res.status(500).json({ error: "Failed to check signal" });
+    }
+  });
+
+  // Get list of available assets with candle data
+  app.get("/api/ema/available-assets", async (req, res) => {
+    try {
+      const candleHistories = (realtimeSignalGenerator as any).candleHistories;
+      
+      if (!candleHistories) {
+        res.json({ assets: [] });
+        return;
+      }
+      
+      const availableAssets: any[] = [];
+      
+      for (const [key, history] of candleHistories.entries()) {
+        const [assetId, timeframe] = key.split('-');
+        const candleCount = (history as any).candles?.length || 0;
+        
+        if (candleCount > 0) {
+          const asset = await storage.getAsset(assetId);
+          availableAssets.push({
+            key,
+            assetId,
+            assetName: asset?.name || assetId,
+            symbol: asset?.symbol || assetId,
+            timeframe,
+            candleCount,
+          });
+        }
+      }
+      
+      res.json({ assets: availableAssets });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to get available assets" });
+    }
+  });
+
   const httpServer = createServer(app);
 
   const wss = new WebSocketServer({ server: httpServer, path: "/ws" });
