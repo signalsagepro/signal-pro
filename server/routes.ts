@@ -1587,14 +1587,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         console.log(`[EMA Chart] Filtered ${candles.length} candles for today from ${history.candles.length} total`);
         
+        // IMPORTANT: Include current/incomplete candle for live price display
+        if (history.currentCandle) {
+          console.log(`[EMA Chart] Adding current candle:`, {
+            timestamp: history.currentCandle.timestamp,
+            price: history.currentCandle.close,
+            timestampLocal: new Date(history.currentCandle.timestamp).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })
+          });
+          
+          // Only include if current candle is from today
+          if (history.currentCandle.timestamp >= todayStartMs) {
+            candles.push(history.currentCandle);
+          }
+        }
+        
         // If no candles today, return empty with message
         if (candles.length === 0) {
           candles = history.candles.slice(-10); // Show last 10 as fallback
           console.log(`[EMA Chart] No candles for today, showing last 10 as fallback`);
         }
       } else {
-        // Get last N candles
+        // Get last N candles (including current candle for live data)
         candles = history.candles.slice(-limit);
+        
+        // Also include current/incomplete candle for live price display
+        if (history.currentCandle) {
+          console.log(`[EMA Chart] Adding current candle to all data view:`, {
+            timestamp: history.currentCandle.timestamp,
+            price: history.currentCandle.close,
+            timestampLocal: new Date(history.currentCandle.timestamp).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })
+          });
+          candles.push(history.currentCandle);
+        }
       }
       
       // Calculate EMA 50 and EMA 200 for the candles
@@ -1608,16 +1632,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Find the starting index for our filtered candles in the full history
       // This ensures EMA values are correctly aligned
       const chartData = candles.map((candle: any) => {
-        // Find this candle's index in the full history
+        // Find this candle's index in the full history (for completed candles)
         const globalIndex = allCandles.findIndex((c: any) => c.timestamp === candle.timestamp);
+        
+        // For current candle, use the last EMA values since it's not in completed history
+        const isCurrentCandle = globalIndex === -1;
+        
         return {
           time: Math.floor(candle.timestamp / 1000), // Unix timestamp in seconds
           open: candle.open,
           high: candle.high,
           low: candle.low,
           close: candle.close,
-          ema50: globalIndex >= 0 && !isNaN(ema50Values[globalIndex]) ? ema50Values[globalIndex] : null,
-          ema200: globalIndex >= 0 && !isNaN(ema200Values[globalIndex]) ? ema200Values[globalIndex] : null,
+          ema50: isCurrentCandle ? 
+            (ema50Values.length > 0 ? ema50Values[ema50Values.length - 1] : null) :
+            (globalIndex >= 0 && !isNaN(ema50Values[globalIndex]) ? ema50Values[globalIndex] : null),
+          ema200: isCurrentCandle ? 
+            (ema200Values.length > 0 ? ema200Values[ema200Values.length - 1] : null) :
+            (globalIndex >= 0 && !isNaN(ema200Values[globalIndex]) ? ema200Values[globalIndex] : null),
         };
       });
       
