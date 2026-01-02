@@ -1635,15 +1635,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const ema200Values = emaCalculator.calculateEMA(closePrices, 200);
       
       // Map candles to chart format with EMA values
+      // IMPORTANT: Add IST offset so chart displays IST times consistently
+      const IST_OFFSET_SEC = 5.5 * 60 * 60; // 5h 30m in seconds
+      
       const chartData = candles.map((candle: any) => {
         const globalIndex = allCandles.findIndex((c: any) => c.timestamp === candle.timestamp);
         const isCurrentCandle = globalIndex === -1;
         
-        // Convert timestamp to seconds for lightweight-charts
-        const timeInSeconds = Math.floor(candle.timestamp / 1000);
+        // Convert UTC timestamp to IST for chart display
+        // This ensures both X-axis and hover tooltip show IST times
+        const utcSeconds = Math.floor(candle.timestamp / 1000);
+        const istSeconds = utcSeconds + IST_OFFSET_SEC;
         
         return {
-          time: timeInSeconds,
+          time: istSeconds,
           open: candle.open,
           high: candle.high,
           low: candle.low,

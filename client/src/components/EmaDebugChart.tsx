@@ -120,15 +120,14 @@ export function EmaDebugChart() {
       timeScale: {
         timeVisible: true,
         secondsVisible: false,
+        // Timestamps are already in IST from server, just format them
         tickMarkFormatter: (time: any) => {
-          const date = new Date(time * 1000); // Convert back to milliseconds
-          return date.toLocaleString('en-IN', { 
-            timeZone: 'Asia/Kolkata',
-            hour: '2-digit',
-            minute: '2-digit',
-            day: '2-digit',
-            month: '2-digit'
-          });
+          const date = new Date(time * 1000);
+          const hours = date.getUTCHours().toString().padStart(2, '0');
+          const mins = date.getUTCMinutes().toString().padStart(2, '0');
+          const day = date.getUTCDate().toString().padStart(2, '0');
+          const month = (date.getUTCMonth() + 1).toString().padStart(2, '0');
+          return `${day}/${month}, ${hours}:${mins}`;
         },
       },
     });
