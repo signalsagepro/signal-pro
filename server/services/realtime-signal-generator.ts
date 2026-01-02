@@ -886,6 +886,9 @@ export class RealtimeSignalGenerator {
         open: closedCandle.open,
         ema50,
         ema200,
+        // Pass previous EMA for crossover detection
+        prevEma50: prevEMA?.ema50,
+        prevEma200: prevEMA?.ema200,
       };
 
       const signals = await signalDetector.detectSignals(marketData);
@@ -931,8 +934,10 @@ export class RealtimeSignalGenerator {
 
       const timestamp = Date.now();
       const price = tickData.lastPrice;
-      const high = tickData.high || price;
-      const low = tickData.low || price;
+      
+      // IMPORTANT: tickData.high/low are DAY's high/low, NOT candle high/low!
+      // We must track candle high/low ourselves based on price movements
+      // Only use the current price to update candle's high/low
 
       // Process for each timeframe - just update candles
       // Signal generation is handled by the timer for precise timing
@@ -941,8 +946,8 @@ export class RealtimeSignalGenerator {
           assetInfo.assetId,
           timeframe,
           price,
-          high,
-          low,
+          price,  // Use price as high (will be tracked per-candle)
+          price,  // Use price as low (will be tracked per-candle)
           timestamp
         );
 
