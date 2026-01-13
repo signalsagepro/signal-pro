@@ -18,28 +18,302 @@ export interface MarketData {
 }
 
 /**
- * Check if price "touches" EMA
- * VERY STRICT: Candle wick must ACTUALLY cross through EMA line
- * Close proximity alone is NOT enough - we need actual touch
+ * Pullback state tracking for proper signal detection.
+ * Tracks whether price has been away from EMA AND which direction (above/below).
+ */
+interface PullbackState {
+  // Was price previously ABOVE this EMA at sufficient distance? (for bullish pullback)
+  wasAboveEma50: boolean;
+  wasAboveEma200: boolean;
+  // Was price previously BELOW this EMA at sufficient distance? (for bearish rejection)
+  wasBelowEma50: boolean;
+  wasBelowEma200: boolean;
+  // Maximum distance seen ABOVE EMA since last touch (positive = above)
+  maxDistanceAboveEma50: number;
+  maxDistanceAboveEma200: number;
+  // Maximum distance seen BELOW EMA since last touch (positive = below)
+  maxDistanceBelowEma50: number;
+  maxDistanceBelowEma200: number;
+  // Last candle's close position relative to EMA
+  lastCloseAboveEma50: boolean;
+  lastCloseAboveEma200: boolean;
+  // Timestamp of last state update
+  lastUpdate: number;
+}
+
+/**
+ * Minimum percentage distance required for a valid "pullback" setup.
+ * Price must have been at least this far from EMA before touching counts.
+ * 0.3% = 30 basis points (e.g., if EMA=100, price must have been at 100.30 or above)
+ */
+const MIN_PULLBACK_DISTANCE_PERCENT = 0.3;
+
+/**
+ * Tolerance for considering price "at" EMA (not above/below).
+ * 0.1% = price within 0.1% of EMA is considered "at" EMA.
+ */
+const EMA_TOUCH_TOLERANCE_PERCENT = 0.1;
+
+/**
+ * Global pullback state tracker.
+ * Key: "assetId-timeframe"
+ */
+const pullbackStates: Map<string, PullbackState> = new Map();
+
+/**
+ * Get or create pullback state for an asset/timeframe
+ */
+function getPullbackState(assetId: string, timeframe: string): PullbackState {
+  const key = `${assetId}-${timeframe}`;
+  if (!pullbackStates.has(key)) {
+    pullbackStates.set(key, {
+      wasAboveEma50: false,
+      wasAboveEma200: false,
+      wasBelowEma50: false,
+      wasBelowEma200: false,
+      maxDistanceAboveEma50: 0,
+      maxDistanceAboveEma200: 0,
+      maxDistanceBelowEma50: 0,
+      maxDistanceBelowEma200: 0,
+      lastCloseAboveEma50: false,
+      lastCloseAboveEma200: false,
+      lastUpdate: 0,
+    });
+  }
+  return pullbackStates.get(key)!;
+}
+
+/**
+ * Update pullback state after processing a candle.
+ * This MUST be called after signal detection to track state properly.
+ */
+export function updatePullbackState(
+  assetId: string,
+  timeframe: string,
+  price: number,
+  ema50: number,
+  ema200: number
+): void {
+  const state = getPullbackState(assetId, timeframe);
+  
+  // Calculate current distances (percentage) - positive = above EMA, negative = below
+  const distanceFromEma50 = ((price - ema50) / ema50) * 100;
+  const distanceFromEma200 = ((price - ema200) / ema200) * 100;
+  
+  // Check if price touched EMA (within tolerance = reset state for NEXT potential signal)
+  const touchedEma50 = Math.abs(distanceFromEma50) < EMA_TOUCH_TOLERANCE_PERCENT;
+  const touchedEma200 = Math.abs(distanceFromEma200) < EMA_TOUCH_TOLERANCE_PERCENT;
+  
+  // === EMA50 State Update ===
+  // IMPORTANT: Only reset wasAbove/wasBelow when price TOUCHES EMA (signal complete)
+  // Do NOT reset when price crosses to other side - that's part of the pullback!
+  if (touchedEma50) {
+    // Reset after touch - pullback cycle complete, start fresh
+    state.wasAboveEma50 = false;
+    state.wasBelowEma50 = false;
+    state.maxDistanceAboveEma50 = 0;
+    state.maxDistanceBelowEma50 = 0;
+  } else if (distanceFromEma50 > 0) {
+    // Price is ABOVE EMA50 - track max distance above
+    state.maxDistanceAboveEma50 = Math.max(state.maxDistanceAboveEma50, distanceFromEma50);
+    if (distanceFromEma50 >= MIN_PULLBACK_DISTANCE_PERCENT) {
+      state.wasAboveEma50 = true;
+    }
+    // DON'T reset wasBelowEma50 here - price crossing above doesn't invalidate prior below state
+  } else {
+    // Price is BELOW EMA50 - track max distance below
+    state.maxDistanceBelowEma50 = Math.max(state.maxDistanceBelowEma50, Math.abs(distanceFromEma50));
+    if (Math.abs(distanceFromEma50) >= MIN_PULLBACK_DISTANCE_PERCENT) {
+      state.wasBelowEma50 = true;
+    }
+    // DON'T reset wasAboveEma50 here - pullback may be in progress
+  }
+  
+  // === EMA200 State Update ===
+  if (touchedEma200) {
+    state.wasAboveEma200 = false;
+    state.wasBelowEma200 = false;
+    state.maxDistanceAboveEma200 = 0;
+    state.maxDistanceBelowEma200 = 0;
+  } else if (distanceFromEma200 > 0) {
+    // Price is ABOVE EMA200
+    state.maxDistanceAboveEma200 = Math.max(state.maxDistanceAboveEma200, distanceFromEma200);
+    if (distanceFromEma200 >= MIN_PULLBACK_DISTANCE_PERCENT) {
+      state.wasAboveEma200 = true;
+    }
+  } else {
+    // Price is BELOW EMA200
+    state.maxDistanceBelowEma200 = Math.max(state.maxDistanceBelowEma200, Math.abs(distanceFromEma200));
+    if (Math.abs(distanceFromEma200) >= MIN_PULLBACK_DISTANCE_PERCENT) {
+      state.wasBelowEma200 = true;
+    }
+  }
+  
+  // Track close position for breakdown/breakout detection
+  state.lastCloseAboveEma50 = price > ema50;
+  state.lastCloseAboveEma200 = price > ema200;
+  state.lastUpdate = Date.now();
+}
+
+/**
+ * Check if candle "touches" EMA with proper validation.
+ * 
+ * A valid touch requires:
+ * 1. Candle's wick actually crossed through EMA (low <= ema <= high)
+ * 2. The touch is meaningful (not just random noise)
+ * 
+ * NOTE: This alone is NOT sufficient for a signal - pullback state must also be validated.
  */
 function touchesEMA(price: number, low: number, high: number, ema: number): boolean {
-  // STRICT CHECK: Candle range must actually cross through EMA
-  // This means low was at or below EMA AND high was at or above EMA
+  // Check if candle range crosses through EMA
   const candleCrossedEMA = low <= ema && high >= ema;
   
-  // Calculate distances for logging
-  const distanceFromClose = ((price - ema) / ema * 100);
-  const distanceFromLow = ((low - ema) / ema * 100);
-  const distanceFromHigh = ((high - ema) / ema * 100);
+  // Calculate how close the close price is to EMA
+  const distanceFromClose = Math.abs((price - ema) / ema * 100);
   
-  console.log(`[touchesEMA] STRICT CHECK:`);
-  console.log(`  Price=${price.toFixed(2)}, Low=${low.toFixed(2)}, High=${high.toFixed(2)}, EMA=${ema.toFixed(2)}`);
-  console.log(`  Distance: close=${distanceFromClose.toFixed(3)}%, low=${distanceFromLow.toFixed(3)}%, high=${distanceFromHigh.toFixed(3)}%`);
-  console.log(`  Candle crossed EMA (low<=ema<=high): ${candleCrossedEMA}`);
+  // For a meaningful touch, either:
+  // 1. Candle crossed through EMA, OR
+  // 2. Close price is very close to EMA (within tolerance)
+  const closeNearEMA = distanceFromClose <= EMA_TOUCH_TOLERANCE_PERCENT;
   
-  // REMOVED: closeNearEMA tolerance - too many false positives
-  // Only true touch counts now
-  return candleCrossedEMA;
+  return candleCrossedEMA || closeNearEMA;
+}
+
+/**
+ * Check if there was a valid BULLISH pullback to EMA.
+ * Requires:
+ * 1. Price was previously ABOVE EMA (at sufficient distance)
+ * 2. Price pulled back and touched EMA
+ * 3. Price bounced (closed above EMA)
+ */
+function isValidBullishPullback(
+  assetId: string,
+  timeframe: string,
+  price: number,
+  low: number,
+  high: number,
+  ema: number,
+  emaName: string
+): boolean {
+  const state = getPullbackState(assetId, timeframe);
+  
+  // Get the appropriate state based on which EMA we're checking
+  // CRITICAL: Must check wasABOVE (not just "away") for bullish pullback
+  const wasAbove = emaName === 'EMA50' ? state.wasAboveEma50 : state.wasAboveEma200;
+  const maxDistanceAbove = emaName === 'EMA50' ? state.maxDistanceAboveEma50 : state.maxDistanceAboveEma200;
+  
+  // Condition 1: Price must have been ABOVE EMA at sufficient distance
+  if (!wasAbove || maxDistanceAbove < MIN_PULLBACK_DISTANCE_PERCENT) {
+    console.log(`[${emaName} Pullback] REJECTED: Price was not sufficiently ABOVE EMA (wasAbove=${wasAbove}, maxDistAbove=${maxDistanceAbove.toFixed(3)}%, required=${MIN_PULLBACK_DISTANCE_PERCENT}%)`);
+    return false;
+  }
+  
+  // Condition 2: Candle must touch EMA (wick crossed through or close is near)
+  const touched = touchesEMA(price, low, high, ema);
+  if (!touched) {
+    console.log(`[${emaName} Pullback] REJECTED: Candle did not touch EMA (low=${low.toFixed(2)}, high=${high.toFixed(2)}, ema=${ema.toFixed(2)})`);
+    return false;
+  }
+  
+  // Condition 3: Price must bounce (close above EMA)
+  const bounced = price > ema;
+  if (!bounced) {
+    console.log(`[${emaName} Pullback] REJECTED: Price did not bounce (close=${price.toFixed(2)} <= ema=${ema.toFixed(2)})`);
+    return false;
+  }
+  
+  console.log(`[${emaName} Pullback] ✅ VALID BULLISH PULLBACK: wasAbove=true, maxDistAbove=${maxDistanceAbove.toFixed(3)}%, touched=true, bounced=true`);
+  return true;
+}
+
+/**
+ * Check if there was a valid BEARISH rejection at EMA.
+ * Requires:
+ * 1. Price was previously BELOW EMA (at sufficient distance)
+ * 2. Price rallied up and touched EMA
+ * 3. Price rejected (closed below EMA)
+ */
+function isValidBearishRejection(
+  assetId: string,
+  timeframe: string,
+  price: number,
+  low: number,
+  high: number,
+  ema: number,
+  emaName: string
+): boolean {
+  const state = getPullbackState(assetId, timeframe);
+  
+  // CRITICAL: Must check wasBELOW (not just "away") for bearish rejection
+  const wasBelow = emaName === 'EMA50' ? state.wasBelowEma50 : state.wasBelowEma200;
+  const maxDistanceBelow = emaName === 'EMA50' ? state.maxDistanceBelowEma50 : state.maxDistanceBelowEma200;
+  
+  // Condition 1: Price must have been BELOW EMA at sufficient distance
+  if (!wasBelow || maxDistanceBelow < MIN_PULLBACK_DISTANCE_PERCENT) {
+    console.log(`[${emaName} Rejection] REJECTED: Price was not sufficiently BELOW EMA (wasBelow=${wasBelow}, maxDistBelow=${maxDistanceBelow.toFixed(3)}%, required=${MIN_PULLBACK_DISTANCE_PERCENT}%)`);
+    return false;
+  }
+  
+  // Condition 2: Candle must touch EMA
+  const touched = touchesEMA(price, low, high, ema);
+  if (!touched) {
+    console.log(`[${emaName} Rejection] REJECTED: Candle did not touch EMA (low=${low.toFixed(2)}, high=${high.toFixed(2)}, ema=${ema.toFixed(2)})`);
+    return false;
+  }
+  
+  // Condition 3: Price must reject (close below EMA)
+  const rejected = price < ema;
+  if (!rejected) {
+    console.log(`[${emaName} Rejection] REJECTED: Price did not reject (close=${price.toFixed(2)} >= ema=${ema.toFixed(2)})`);
+    return false;
+  }
+  
+  console.log(`[${emaName} Rejection] ✅ VALID BEARISH REJECTION: wasBelow=true, maxDistBelow=${maxDistanceBelow.toFixed(3)}%, touched=true, rejected=true`);
+  return true;
+}
+
+/**
+ * Check if there was a valid breakdown through EMA.
+ * Requires:
+ * 1. Price was previously ABOVE EMA
+ * 2. Price broke down through EMA
+ * 3. Price closed BELOW EMA (breakdown confirmation)
+ */
+function isValidBreakdown(
+  assetId: string,
+  timeframe: string,
+  price: number,
+  low: number,
+  high: number,
+  ema: number,
+  emaName: string
+): boolean {
+  const state = getPullbackState(assetId, timeframe);
+  
+  // Check if previous candle was above EMA
+  const wasAbove = emaName === 'EMA50' ? state.lastCloseAboveEma50 : state.lastCloseAboveEma200;
+  
+  if (!wasAbove) {
+    console.log(`[${emaName} Breakdown] REJECTED: Previous close was not above EMA`);
+    return false;
+  }
+  
+  // Candle must cross through EMA
+  const crossed = low <= ema && high >= ema;
+  if (!crossed) {
+    console.log(`[${emaName} Breakdown] REJECTED: Candle did not cross through EMA`);
+    return false;
+  }
+  
+  // Must close below EMA
+  const brokeDown = price < ema;
+  if (!brokeDown) {
+    console.log(`[${emaName} Breakdown] REJECTED: Price did not close below EMA`);
+    return false;
+  }
+  
+  console.log(`[${emaName} Breakdown] ✅ VALID: wasAbove=true, crossed=true, brokeDown=true`);
+  return true;
 }
 
 /**
@@ -69,18 +343,27 @@ export class Strategy15MAbove50Bullish implements ISignalStrategy {
   }
 
   check(data: MarketData): boolean {
-    // Price must touch or be near EMA50 (pullback to EMA50 in uptrend)
-    const touchesEma50 = touchesEMA(data.price, data.low, data.high, data.ema50);
-    
     // Must be in uptrend (EMA50 > EMA200)
     const ema50Above200 = data.ema50 > data.ema200;
+    if (!ema50Above200) {
+      console.log(`[15m_above_50_bullish] SKIP: Not in uptrend (EMA50=${data.ema50.toFixed(2)} < EMA200=${data.ema200.toFixed(2)})`);
+      return false;
+    }
     
-    // Price bounced off EMA50 (closed above it)
-    const bouncedUp = data.price > data.ema50;
+    // Check for valid bullish pullback to EMA50
+    const validPullback = isValidBullishPullback(
+      data.assetId,
+      data.timeframe,
+      data.price,
+      data.low,
+      data.high,
+      data.ema50,
+      'EMA50'
+    );
     
-    console.log(`[15m_above_50_bullish] touchesEma50=${touchesEma50}, ema50Above200=${ema50Above200}, bouncedUp=${bouncedUp}, price=${data.price.toFixed(2)}, ema50=${data.ema50.toFixed(2)}, ema200=${data.ema200.toFixed(2)}, low=${data.low.toFixed(2)}`);
+    console.log(`[15m_above_50_bullish] uptrend=${ema50Above200}, validPullback=${validPullback}, price=${data.price.toFixed(2)}, ema50=${data.ema50.toFixed(2)}, ema200=${data.ema200.toFixed(2)}`);
     
-    return touchesEma50 && ema50Above200 && bouncedUp;
+    return validPullback;
   }
 }
 
@@ -90,18 +373,25 @@ export class Strategy5MAbove200Reversal implements ISignalStrategy {
   }
 
   check(data: MarketData): boolean {
-    // Price must touch EMA200 from below (potential reversal)
-    const touches200 = touchesEMA(data.price, data.low, data.high, data.ema200);
-    
     // In a downtrend (EMA200 > EMA50) - reversal setup
     const ema200Above50 = data.ema200 > data.ema50;
+    if (!ema200Above50) {
+      console.log(`[5m_above_200_reversal] SKIP: Not in downtrend (EMA200=${data.ema200.toFixed(2)} < EMA50=${data.ema50.toFixed(2)})`);
+      return false;
+    }
     
-    // Price closed above EMA200 (reversal confirmation)
-    const closedAbove200 = data.price > data.ema200;
+    // For reversals, we need price to have been BELOW EMA200, then break above
+    // This is a breakout, not a pullback - check if previous close was below and now above
+    const state = getPullbackState(data.assetId, data.timeframe);
+    const wasBelow = !state.lastCloseAboveEma200;
+    const nowAbove = data.price > data.ema200;
+    const crossed = data.low <= data.ema200 && data.high >= data.ema200;
     
-    console.log(`[5m_above_200_reversal] touches200=${touches200}, ema200Above50=${ema200Above50}, closedAbove200=${closedAbove200}, price=${data.price.toFixed(2)}, ema200=${data.ema200.toFixed(2)}, ema50=${data.ema50.toFixed(2)}`);
+    const validReversal = wasBelow && nowAbove && crossed;
     
-    return touches200 && ema200Above50 && closedAbove200;
+    console.log(`[5m_above_200_reversal] downtrend=${ema200Above50}, wasBelow=${wasBelow}, nowAbove=${nowAbove}, crossed=${crossed}, valid=${validReversal}`);
+    
+    return validReversal;
   }
 }
 
@@ -111,18 +401,27 @@ export class Strategy5MPullbackTo200 implements ISignalStrategy {
   }
 
   check(data: MarketData): boolean {
-    // Price must actually touch or be very close to EMA200
-    const touches200 = touchesEMA(data.price, data.low, data.high, data.ema200);
-    
     // In an uptrend (EMA50 > EMA200)
     const ema50Above200 = data.ema50 > data.ema200;
+    if (!ema50Above200) {
+      console.log(`[5m_pullback_to_200] SKIP: Not in uptrend (EMA50=${data.ema50.toFixed(2)} < EMA200=${data.ema200.toFixed(2)})`);
+      return false;
+    }
     
-    // Price bounced (closed above EMA200 after touching)
-    const bouncedUp = data.price > data.ema200;
+    // Check for valid bullish pullback to EMA200
+    const validPullback = isValidBullishPullback(
+      data.assetId,
+      data.timeframe,
+      data.price,
+      data.low,
+      data.high,
+      data.ema200,
+      'EMA200'
+    );
     
-    console.log(`[5m_pullback_to_200] touches200=${touches200}, ema50Above200=${ema50Above200}, bouncedUp=${bouncedUp}, price=${data.price}, ema200=${data.ema200}, low=${data.low}`);
+    console.log(`[5m_pullback_to_200] uptrend=${ema50Above200}, validPullback=${validPullback}, price=${data.price.toFixed(2)}, ema200=${data.ema200.toFixed(2)}`);
     
-    return touches200 && ema50Above200 && bouncedUp;
+    return validPullback;
   }
 }
 
@@ -132,18 +431,27 @@ export class Strategy5MBelow200Bearish implements ISignalStrategy {
   }
 
   check(data: MarketData): boolean {
-    // Price must touch EMA200 from above and close below (breakdown)
-    const touches200 = touchesEMA(data.price, data.low, data.high, data.ema200);
-    
-    // Was in an uptrend (EMA50 > EMA200) - breakdown setup
+    // In an uptrend (EMA50 > EMA200) - breakdown setup
     const ema50Above200 = data.ema50 > data.ema200;
+    if (!ema50Above200) {
+      console.log(`[5m_below_200_bearish] SKIP: Not in uptrend (EMA50=${data.ema50.toFixed(2)} < EMA200=${data.ema200.toFixed(2)})`);
+      return false;
+    }
     
-    // Price closed below EMA200 (breakdown confirmation)
-    const closedBelow200 = data.price < data.ema200;
+    // Check for valid breakdown through EMA200
+    const validBreakdown = isValidBreakdown(
+      data.assetId,
+      data.timeframe,
+      data.price,
+      data.low,
+      data.high,
+      data.ema200,
+      'EMA200'
+    );
     
-    console.log(`[5m_below_200_bearish] touches200=${touches200}, ema50Above200=${ema50Above200}, closedBelow200=${closedBelow200}, price=${data.price.toFixed(2)}, ema200=${data.ema200.toFixed(2)}, high=${data.high.toFixed(2)}`);
+    console.log(`[5m_below_200_bearish] uptrend=${ema50Above200}, validBreakdown=${validBreakdown}, price=${data.price.toFixed(2)}, ema200=${data.ema200.toFixed(2)}`);
     
-    return touches200 && ema50Above200 && closedBelow200;
+    return validBreakdown;
   }
 }
 
@@ -153,18 +461,27 @@ export class Strategy5MTouch200Downtrend implements ISignalStrategy {
   }
 
   check(data: MarketData): boolean {
-    // Price must actually touch EMA200 from below
-    const touches200 = touchesEMA(data.price, data.low, data.high, data.ema200);
-    
     // In a downtrend (EMA200 > EMA50)
     const ema200Above50 = data.ema200 > data.ema50;
+    if (!ema200Above50) {
+      console.log(`[5m_touch_200_downtrend] SKIP: Not in downtrend (EMA200=${data.ema200.toFixed(2)} < EMA50=${data.ema50.toFixed(2)})`);
+      return false;
+    }
     
-    // Price rejected (closed below EMA200 after touching)
-    const rejectedDown = data.price < data.ema200;
+    // Check for valid bearish rejection at EMA200
+    const validRejection = isValidBearishRejection(
+      data.assetId,
+      data.timeframe,
+      data.price,
+      data.low,
+      data.high,
+      data.ema200,
+      'EMA200'
+    );
     
-    console.log(`[5m_touch_200_downtrend] touches200=${touches200}, ema200Above50=${ema200Above50}, rejectedDown=${rejectedDown}, price=${data.price}, ema200=${data.ema200}, high=${data.high}`);
+    console.log(`[5m_touch_200_downtrend] downtrend=${ema200Above50}, validRejection=${validRejection}, price=${data.price.toFixed(2)}, ema200=${data.ema200.toFixed(2)}`);
     
-    return touches200 && ema200Above50 && rejectedDown;
+    return validRejection;
   }
 }
 
@@ -174,18 +491,27 @@ export class Strategy15MBelow200Breakdown implements ISignalStrategy {
   }
 
   check(data: MarketData): boolean {
-    // Price must touch EMA200 from above (breakdown setup)
-    const touches200 = touchesEMA(data.price, data.low, data.high, data.ema200);
-    
     // Was in an uptrend (EMA50 > EMA200)
     const ema50Above200 = data.ema50 > data.ema200;
+    if (!ema50Above200) {
+      console.log(`[15m_below_200_breakdown] SKIP: Not in uptrend (EMA50=${data.ema50.toFixed(2)} < EMA200=${data.ema200.toFixed(2)})`);
+      return false;
+    }
     
-    // Price broke down (closed below EMA200)
-    const brokeDown = data.price < data.ema200;
+    // Check for valid breakdown through EMA200
+    const validBreakdown = isValidBreakdown(
+      data.assetId,
+      data.timeframe,
+      data.price,
+      data.low,
+      data.high,
+      data.ema200,
+      'EMA200'
+    );
     
-    console.log(`[15m_below_200_breakdown] touches200=${touches200}, ema50Above200=${ema50Above200}, brokeDown=${brokeDown}, price=${data.price.toFixed(2)}, ema200=${data.ema200.toFixed(2)}, high=${data.high.toFixed(2)}`);
+    console.log(`[15m_below_200_breakdown] uptrend=${ema50Above200}, validBreakdown=${validBreakdown}, price=${data.price.toFixed(2)}, ema200=${data.ema200.toFixed(2)}`);
     
-    return touches200 && ema50Above200 && brokeDown;
+    return validBreakdown;
   }
 }
 

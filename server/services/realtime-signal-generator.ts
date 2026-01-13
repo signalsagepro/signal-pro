@@ -1,5 +1,5 @@
 import { storage } from "../storage";
-import { signalDetector, type MarketData } from "./signal-detector";
+import { signalDetector, type MarketData, updatePullbackState } from "./signal-detector";
 import { brokerWebSocket } from "./broker-websocket";
 import { emaCalculator } from "./ema-calculator";
 import { ZerodhaAdapter, type HistoricalCandle } from "./broker-service";
@@ -1089,6 +1089,10 @@ export class RealtimeSignalGenerator {
       };
 
       const signals = await signalDetector.detectSignals(marketData);
+
+      // CRITICAL: Update pullback state AFTER signal detection
+      // This tracks price distance from EMAs for next candle's pullback validation
+      updatePullbackState(assetInfo.assetId, timeframe, closedCandle.close, ema50, ema200);
 
       for (const signal of signals) {
         const createdSignal = await storage.createSignal(signal);
