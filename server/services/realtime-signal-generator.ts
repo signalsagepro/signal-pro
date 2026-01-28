@@ -1,5 +1,5 @@
 import { storage } from "../storage";
-import { signalDetector, type MarketData, updatePullbackState } from "./signal-detector";
+import { signalDetector, type MarketData, updatePullbackState, initializePullbackStateFromHistory } from "./signal-detector";
 import { brokerWebSocket } from "./broker-websocket";
 import { emaCalculator } from "./ema-calculator";
 import { ZerodhaAdapter, type HistoricalCandle } from "./broker-service";
@@ -642,6 +642,22 @@ export class RealtimeSignalGenerator {
     }
     
     console.log(`[LoadHistorical] Total candles now: ${history.candles.length}, Last candle: ${new Date(history.lastCandleTime).toISOString()}`);
+    
+    // CRITICAL: Initialize pullback state from historical data
+    // This ensures signals are accurate from the start, not just after live data accumulates
+    if (history.candles.length >= 200) {
+      const closePrices = history.candles.map(c => c.close);
+      const ema50Values = emaCalculator.calculateEMA(closePrices, 50);
+      const ema200Values = emaCalculator.calculateEMA(closePrices, 200);
+      
+      initializePullbackStateFromHistory(
+        assetId,
+        timeframe,
+        history.candles,
+        ema50Values,
+        ema200Values
+      );
+    }
   }
 
   /**

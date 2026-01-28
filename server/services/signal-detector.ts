@@ -118,7 +118,7 @@ const pullbackStates: Map<string, PullbackState> = new Map();
 /**
  * Get or create pullback state for an asset/timeframe
  */
-function getPullbackState(assetId: string, timeframe: string): PullbackState {
+export function getPullbackState(assetId: string, timeframe: string): PullbackState {
   const key = `${assetId}-${timeframe}`;
   if (!pullbackStates.has(key)) {
     pullbackStates.set(key, {
@@ -228,6 +228,123 @@ export function updatePullbackState(
   
   // Debug logging for state tracking
   console.log(`[PullbackState] Updated: EMA50 pos=${state.lastCloseAboveEma50 ? 'ABOVE' : state.lastCloseBelowEma50 ? 'BELOW' : 'AT'}, EMA200 pos=${state.lastCloseAboveEma200 ? 'ABOVE' : state.lastCloseBelowEma200 ? 'BELOW' : 'AT'}, wasAbove50=${state.wasAboveEma50}, wasAbove200=${state.wasAboveEma200}`);
+}
+
+/**
+ * Initialize pullback state from historical candles.
+ * This is CRITICAL for accurate signals - without this, new assets start with empty state
+ * and will miss signals or generate false ones.
+ * 
+ * Should be called after historical data is loaded for an asset.
+ * 
+ * @param assetId - Asset ID
+ * @param timeframe - Timeframe (e.g., "5m", "15m")
+ * @param candles - Array of historical candles with OHLC data
+ * @param ema50Values - Array of EMA50 values (same length as candles)
+ * @param ema200Values - Array of EMA200 values (same length as candles)
+ */
+export function initializePullbackStateFromHistory(
+  assetId: string,
+  timeframe: string,
+  candles: { close: number; low: number; high: number }[],
+  ema50Values: number[],
+  ema200Values: number[]
+): void {
+  if (candles.length === 0 || ema50Values.length === 0 || ema200Values.length === 0) {
+    console.log(`[PullbackState] Cannot initialize - no data for ${assetId} ${timeframe}`);
+    return;
+  }
+
+  const state = getPullbackState(assetId, timeframe);
+  
+  // Process the last N candles to build up state (enough to capture pullback patterns)
+  // We need to process enough candles to capture the "was away from EMA" state
+  const LOOKBACK_CANDLES = Math.min(50, candles.length);
+  const startIdx = Math.max(0, candles.length - LOOKBACK_CANDLES);
+  
+  console.log(`[PullbackState] Initializing ${assetId} ${timeframe} from ${LOOKBACK_CANDLES} historical candles`);
+  
+  // Reset state before initialization
+  state.wasAboveEma50 = false;
+  state.wasAboveEma200 = false;
+  state.wasBelowEma50 = false;
+  state.wasBelowEma200 = false;
+  state.maxDistanceAboveEma50 = 0;
+  state.maxDistanceAboveEma200 = 0;
+  state.maxDistanceBelowEma50 = 0;
+  state.maxDistanceBelowEma200 = 0;
+  
+  // Process historical candles to build state
+  for (let i = startIdx; i < candles.length; i++) {
+    const candle = candles[i];
+    const ema50 = ema50Values[i];
+    const ema200 = ema200Values[i];
+    
+    // Skip if EMA values are invalid (NaN during warm-up period)
+    if (isNaN(ema50) || isNaN(ema200)) continue;
+    
+    const price = candle.close;
+    const distanceFromEma50 = ((price - ema50) / ema50) * 100;
+    const distanceFromEma200 = ((price - ema200) / ema200) * 100;
+    
+    const touchedEma50 = Math.abs(distanceFromEma50) < EMA_TOUCH_TOLERANCE_PERCENT;
+    const touchedEma200 = Math.abs(distanceFromEma200) < EMA_TOUCH_TOLERANCE_PERCENT;
+    
+    // EMA50 state
+    if (touchedEma50) {
+      state.wasAboveEma50 = false;
+      state.wasBelowEma50 = false;
+      state.maxDistanceAboveEma50 = 0;
+      state.maxDistanceBelowEma50 = 0;
+    } else if (distanceFromEma50 > 0) {
+      state.maxDistanceAboveEma50 = Math.max(state.maxDistanceAboveEma50, distanceFromEma50);
+      if (distanceFromEma50 >= MIN_PULLBACK_DISTANCE_PERCENT) {
+        state.wasAboveEma50 = true;
+      }
+    } else {
+      state.maxDistanceBelowEma50 = Math.max(state.maxDistanceBelowEma50, Math.abs(distanceFromEma50));
+      if (Math.abs(distanceFromEma50) >= MIN_PULLBACK_DISTANCE_PERCENT) {
+        state.wasBelowEma50 = true;
+      }
+    }
+    
+    // EMA200 state
+    if (touchedEma200) {
+      state.wasAboveEma200 = false;
+      state.wasBelowEma200 = false;
+      state.maxDistanceAboveEma200 = 0;
+      state.maxDistanceBelowEma200 = 0;
+    } else if (distanceFromEma200 > 0) {
+      state.maxDistanceAboveEma200 = Math.max(state.maxDistanceAboveEma200, distanceFromEma200);
+      if (distanceFromEma200 >= MIN_PULLBACK_DISTANCE_PERCENT) {
+        state.wasAboveEma200 = true;
+      }
+    } else {
+      state.maxDistanceBelowEma200 = Math.max(state.maxDistanceBelowEma200, Math.abs(distanceFromEma200));
+      if (Math.abs(distanceFromEma200) >= MIN_PULLBACK_DISTANCE_PERCENT) {
+        state.wasBelowEma200 = true;
+      }
+    }
+  }
+  
+  // Set final position from last candle
+  const lastCandle = candles[candles.length - 1];
+  const lastEma50 = ema50Values[ema50Values.length - 1];
+  const lastEma200 = ema200Values[ema200Values.length - 1];
+  
+  if (!isNaN(lastEma50) && !isNaN(lastEma200)) {
+    state.lastCloseAboveEma50 = isPriceAboveEMA(lastCandle.close, lastEma50);
+    state.lastCloseAtEma50 = isPriceAtEMA(lastCandle.close, lastEma50);
+    state.lastCloseBelowEma50 = isPriceBelowEMA(lastCandle.close, lastEma50);
+    
+    state.lastCloseAboveEma200 = isPriceAboveEMA(lastCandle.close, lastEma200);
+    state.lastCloseAtEma200 = isPriceAtEMA(lastCandle.close, lastEma200);
+    state.lastCloseBelowEma200 = isPriceBelowEMA(lastCandle.close, lastEma200);
+  }
+  
+  state.lastUpdate = Date.now();
+  
+  console.log(`[PullbackState] ✅ Initialized ${assetId} ${timeframe}: EMA50 pos=${state.lastCloseAboveEma50 ? 'ABOVE' : state.lastCloseBelowEma50 ? 'BELOW' : 'AT'}, EMA200 pos=${state.lastCloseAboveEma200 ? 'ABOVE' : state.lastCloseBelowEma200 ? 'BELOW' : 'AT'}, wasAbove50=${state.wasAboveEma50}, wasAbove200=${state.wasAboveEma200}, wasBelow50=${state.wasBelowEma50}, wasBelow200=${state.wasBelowEma200}`);
 }
 
 /**
