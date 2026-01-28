@@ -657,6 +657,15 @@ export class RealtimeSignalGenerator {
         ema50Values,
         ema200Values
       );
+      
+      // ALSO initialize previousEMA for crossover detection on first live candle
+      const lastEma50 = ema50Values[ema50Values.length - 1];
+      const lastEma200 = ema200Values[ema200Values.length - 1];
+      if (!isNaN(lastEma50) && !isNaN(lastEma200)) {
+        const emaKey = `${assetId}-${timeframe}`;
+        this.previousEMA.set(emaKey, { ema50: lastEma50, ema200: lastEma200 });
+        console.log(`[LoadHistorical] ✅ Initialized previousEMA for ${assetId} ${timeframe}: EMA50=${lastEma50.toFixed(2)}, EMA200=${lastEma200.toFixed(2)}`);
+      }
     }
   }
 

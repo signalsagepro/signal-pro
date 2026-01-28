@@ -259,7 +259,11 @@ export function initializePullbackStateFromHistory(
   
   // Process the last N candles to build up state (enough to capture pullback patterns)
   // We need to process enough candles to capture the "was away from EMA" state
-  const LOOKBACK_CANDLES = Math.min(50, candles.length);
+  // 200 candles covers:
+  //   - 5m timeframe: ~16.5 hours (full trading day+)
+  //   - 15m timeframe: ~50 hours (~2 trading days)
+  // This ensures we capture pullback patterns that may span several hours
+  const LOOKBACK_CANDLES = Math.min(200, candles.length);
   const startIdx = Math.max(0, candles.length - LOOKBACK_CANDLES);
   
   console.log(`[PullbackState] Initializing ${assetId} ${timeframe} from ${LOOKBACK_CANDLES} historical candles`);
