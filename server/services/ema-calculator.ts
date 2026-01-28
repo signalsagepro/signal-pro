@@ -204,4 +204,42 @@ export class EMACalculator {
   }
 }
 
+/**
+ * Compare EMA values with TradingView reference values.
+ * Used to verify our EMA matches TradingView's calculation.
+ * 
+ * TradingView EMA Formula (confirmed):
+ * - Smoothing Factor (α) = 2 / (period + 1)
+ * - First EMA = SMA of first `period` values
+ * - Subsequent EMA = (Close - Previous EMA) × α + Previous EMA
+ * 
+ * Key requirements for matching TradingView:
+ * 1. Use SMA as initial seed (not first close price)
+ * 2. Calculate from candle CLOSES only (not ticks)
+ * 3. Need sufficient historical data (500+ candles for EMA200 convergence)
+ * 4. Use ALL historical data, not a sliding window
+ * 
+ * Note: Small discrepancies (<0.01%) are normal due to:
+ * - Different chart start dates
+ * - Floating point precision
+ * - Number of historical candles available
+ */
+export function compareWithTradingView(
+  ourEma: number,
+  tradingViewEma: number,
+  tolerance: number = 0.01
+): { matches: boolean; differencePercent: number; details: string } {
+  const difference = Math.abs(ourEma - tradingViewEma);
+  const differencePercent = (difference / tradingViewEma) * 100;
+  const matches = differencePercent <= tolerance;
+  
+  return {
+    matches,
+    differencePercent,
+    details: matches 
+      ? `EMA matches TradingView within ${tolerance}% tolerance (diff: ${differencePercent.toFixed(4)}%)`
+      : `EMA differs from TradingView by ${differencePercent.toFixed(4)}% (our: ${ourEma.toFixed(2)}, TV: ${tradingViewEma.toFixed(2)})`
+  };
+}
+
 export const emaCalculator = new EMACalculator();

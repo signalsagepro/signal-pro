@@ -20,6 +20,11 @@ export interface MarketData {
 /**
  * Pullback state tracking for proper signal detection.
  * Tracks whether price has been away from EMA AND which direction (above/below).
+ * 
+ * IMPORTANT: Position states are mutually exclusive:
+ * - lastCloseAboveEma: price > EMA + tolerance (strictly above)
+ * - lastCloseAtEma: price within ± tolerance of EMA (touching)
+ * - lastCloseBelowEma: price < EMA - tolerance (strictly below)
  */
 interface PullbackState {
   // Was price previously ABOVE this EMA at sufficient distance? (for bullish pullback)
@@ -34,9 +39,13 @@ interface PullbackState {
   // Maximum distance seen BELOW EMA since last touch (positive = below)
   maxDistanceBelowEma50: number;
   maxDistanceBelowEma200: number;
-  // Last candle's close position relative to EMA
+  // Last candle's close position relative to EMA (mutually exclusive states)
   lastCloseAboveEma50: boolean;
   lastCloseAboveEma200: boolean;
+  lastCloseAtEma50: boolean;      // Price was AT/TOUCHING EMA (within tolerance)
+  lastCloseAtEma200: boolean;
+  lastCloseBelowEma50: boolean;   // Price was strictly BELOW EMA
+  lastCloseBelowEma200: boolean;
   // Timestamp of last state update
   lastUpdate: number;
 }
@@ -53,6 +62,52 @@ const MIN_PULLBACK_DISTANCE_PERCENT = 0.3;
  * 0.1% = price within 0.1% of EMA is considered "at" EMA.
  */
 const EMA_TOUCH_TOLERANCE_PERCENT = 0.1;
+
+/**
+ * Check if price is strictly ABOVE EMA (accounting for tolerance).
+ * Returns false if price is within tolerance (considered "at" EMA).
+ */
+export function isPriceAboveEMA(price: number, ema: number): boolean {
+  const distancePercent = ((price - ema) / ema) * 100;
+  // Must be above tolerance to be considered "above"
+  return distancePercent > EMA_TOUCH_TOLERANCE_PERCENT;
+}
+
+/**
+ * Check if price is strictly BELOW EMA (accounting for tolerance).
+ * Returns false if price is within tolerance (considered "at" EMA).
+ */
+export function isPriceBelowEMA(price: number, ema: number): boolean {
+  const distancePercent = ((price - ema) / ema) * 100;
+  // Must be below negative tolerance to be considered "below"
+  return distancePercent < -EMA_TOUCH_TOLERANCE_PERCENT;
+}
+
+/**
+ * Check if price is AT or TOUCHING EMA (within tolerance).
+ */
+export function isPriceAtEMA(price: number, ema: number): boolean {
+  const distancePercent = Math.abs(((price - ema) / ema) * 100);
+  return distancePercent <= EMA_TOUCH_TOLERANCE_PERCENT;
+}
+
+/**
+ * Check if price is at or above EMA (on or above).
+ */
+export function isPriceAtOrAboveEMA(price: number, ema: number): boolean {
+  const distancePercent = ((price - ema) / ema) * 100;
+  // At or above means >= -tolerance (not below by more than tolerance)
+  return distancePercent >= -EMA_TOUCH_TOLERANCE_PERCENT;
+}
+
+/**
+ * Check if price is at or below EMA (on or below).
+ */
+export function isPriceAtOrBelowEMA(price: number, ema: number): boolean {
+  const distancePercent = ((price - ema) / ema) * 100;
+  // At or below means <= tolerance (not above by more than tolerance)
+  return distancePercent <= EMA_TOUCH_TOLERANCE_PERCENT;
+}
 
 /**
  * Global pullback state tracker.
@@ -77,6 +132,10 @@ function getPullbackState(assetId: string, timeframe: string): PullbackState {
       maxDistanceBelowEma200: 0,
       lastCloseAboveEma50: false,
       lastCloseAboveEma200: false,
+      lastCloseAtEma50: false,
+      lastCloseAtEma200: false,
+      lastCloseBelowEma50: false,
+      lastCloseBelowEma200: false,
       lastUpdate: 0,
     });
   }
@@ -150,9 +209,25 @@ export function updatePullbackState(
   }
   
   // Track close position for breakdown/breakout detection
-  state.lastCloseAboveEma50 = price > ema50;
-  state.lastCloseAboveEma200 = price > ema200;
+  // Use tolerance-based comparison with mutually exclusive states:
+  // - above: price > EMA + tolerance
+  // - at: price within ± tolerance of EMA  
+  // - below: price < EMA - tolerance
+  
+  // EMA50 position
+  state.lastCloseAboveEma50 = isPriceAboveEMA(price, ema50);
+  state.lastCloseAtEma50 = isPriceAtEMA(price, ema50);
+  state.lastCloseBelowEma50 = isPriceBelowEMA(price, ema50);
+  
+  // EMA200 position
+  state.lastCloseAboveEma200 = isPriceAboveEMA(price, ema200);
+  state.lastCloseAtEma200 = isPriceAtEMA(price, ema200);
+  state.lastCloseBelowEma200 = isPriceBelowEMA(price, ema200);
+  
   state.lastUpdate = Date.now();
+  
+  // Debug logging for state tracking
+  console.log(`[PullbackState] Updated: EMA50 pos=${state.lastCloseAboveEma50 ? 'ABOVE' : state.lastCloseBelowEma50 ? 'BELOW' : 'AT'}, EMA200 pos=${state.lastCloseAboveEma200 ? 'ABOVE' : state.lastCloseBelowEma200 ? 'BELOW' : 'AT'}, wasAbove50=${state.wasAboveEma50}, wasAbove200=${state.wasAboveEma200}`);
 }
 
 /**
@@ -215,10 +290,12 @@ function isValidBullishPullback(
     return false;
   }
   
-  // Condition 3: Price must bounce (close above EMA)
-  const bounced = price > ema;
+  // Condition 3: Price must bounce (close above EMA - using tolerance-based comparison)
+  // Price must be strictly above EMA (not just touching/at EMA)
+  const bounced = isPriceAboveEMA(price, ema);
   if (!bounced) {
-    console.log(`[${emaName} Pullback] REJECTED: Price did not bounce (close=${price.toFixed(2)} <= ema=${ema.toFixed(2)})`);
+    const atEMA = isPriceAtEMA(price, ema);
+    console.log(`[${emaName} Pullback] REJECTED: Price did not bounce (close=${price.toFixed(2)}, ema=${ema.toFixed(2)}, atEMA=${atEMA})`);
     return false;
   }
   
@@ -261,10 +338,12 @@ function isValidBearishRejection(
     return false;
   }
   
-  // Condition 3: Price must reject (close below EMA)
-  const rejected = price < ema;
+  // Condition 3: Price must reject (close below EMA - using tolerance-based comparison)
+  // Price must be strictly below EMA (not just touching/at EMA)
+  const rejected = isPriceBelowEMA(price, ema);
   if (!rejected) {
-    console.log(`[${emaName} Rejection] REJECTED: Price did not reject (close=${price.toFixed(2)} >= ema=${ema.toFixed(2)})`);
+    const atEMA = isPriceAtEMA(price, ema);
+    console.log(`[${emaName} Rejection] REJECTED: Price did not reject (close=${price.toFixed(2)}, ema=${ema.toFixed(2)}, atEMA=${atEMA})`);
     return false;
   }
   
@@ -290,11 +369,14 @@ function isValidBreakdown(
 ): boolean {
   const state = getPullbackState(assetId, timeframe);
   
-  // Check if previous candle was above EMA
-  const wasAbove = emaName === 'EMA50' ? state.lastCloseAboveEma50 : state.lastCloseAboveEma200;
+  // Check if previous candle was above or at EMA (breakdown can start from AT the EMA too)
+  const wasStrictlyAbove = emaName === 'EMA50' ? state.lastCloseAboveEma50 : state.lastCloseAboveEma200;
+  const wasAtEma = emaName === 'EMA50' ? state.lastCloseAtEma50 : state.lastCloseAtEma200;
+  const wasAboveOrAt = wasStrictlyAbove || wasAtEma;
   
-  if (!wasAbove) {
-    console.log(`[${emaName} Breakdown] REJECTED: Previous close was not above EMA`);
+  if (!wasAboveOrAt) {
+    const wasBelow = emaName === 'EMA50' ? state.lastCloseBelowEma50 : state.lastCloseBelowEma200;
+    console.log(`[${emaName} Breakdown] REJECTED: Previous close was below EMA (wasAbove=${wasStrictlyAbove}, wasAt=${wasAtEma}, wasBelow=${wasBelow})`);
     return false;
   }
   
@@ -305,10 +387,12 @@ function isValidBreakdown(
     return false;
   }
   
-  // Must close below EMA
-  const brokeDown = price < ema;
+  // Must close below EMA (using tolerance-based comparison)
+  // Price must be strictly below EMA (not just touching/at EMA)
+  const brokeDown = isPriceBelowEMA(price, ema);
   if (!brokeDown) {
-    console.log(`[${emaName} Breakdown] REJECTED: Price did not close below EMA`);
+    const atEMA = isPriceAtEMA(price, ema);
+    console.log(`[${emaName} Breakdown] REJECTED: Price did not close below EMA (atEMA=${atEMA})`);
     return false;
   }
   
@@ -381,15 +465,20 @@ export class Strategy5MAbove200Reversal implements ISignalStrategy {
     }
     
     // For reversals, we need price to have been BELOW EMA200, then break above
-    // This is a breakout, not a pullback - check if previous close was below and now above
+    // This is a breakout, not a pullback - check if previous close was strictly BELOW (not just "at")
+    // Use the new tri-state tracking for accurate detection
     const state = getPullbackState(data.assetId, data.timeframe);
-    const wasBelow = !state.lastCloseAboveEma200;
-    const nowAbove = data.price > data.ema200;
+    
+    // wasBelow means previous candle closed STRICTLY below EMA (not at/touching)
+    const wasStrictlyBelow = state.lastCloseBelowEma200;
+    const wasAtOrBelow = state.lastCloseBelowEma200 || state.lastCloseAtEma200;
+    const nowAbove = isPriceAboveEMA(data.price, data.ema200);
     const crossed = data.low <= data.ema200 && data.high >= data.ema200;
     
-    const validReversal = wasBelow && nowAbove && crossed;
+    // For a valid reversal: previous close was below (or at) EMA, now strictly above, and candle crossed
+    const validReversal = wasAtOrBelow && nowAbove && crossed;
     
-    console.log(`[5m_above_200_reversal] downtrend=${ema200Above50}, wasBelow=${wasBelow}, nowAbove=${nowAbove}, crossed=${crossed}, valid=${validReversal}`);
+    console.log(`[5m_above_200_reversal] downtrend=${ema200Above50}, wasStrictlyBelow=${wasStrictlyBelow}, wasAtOrBelow=${wasAtOrBelow}, nowAbove=${nowAbove}, crossed=${crossed}, valid=${validReversal}`);
     
     return validReversal;
   }

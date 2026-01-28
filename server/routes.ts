@@ -11,7 +11,7 @@ import { notificationService } from "./services/notification-service";
 import { brokerService } from "./services/broker-service";
 import { brokerWebSocket } from "./services/broker-websocket";
 import { formulaEvaluator } from "./services/formula-evaluator";
-import { signalDetector } from "./services/signal-detector";
+import { signalDetector, isPriceAboveEMA, isPriceBelowEMA, isPriceAtEMA } from "./services/signal-detector";
 import { requireAuth, requireAdmin, loginRateLimit, apiRateLimit, strictRateLimit } from "./middleware/auth";
 
 // Helper function to create activity logs
@@ -1799,11 +1799,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
           conditions.push({
             name: "Price > EMA50",
-            description: "Bounced up from EMA50",
-            met: price > ema50,
-            value: `price=${price.toFixed(2)}, ema50=${ema50.toFixed(2)}`
+            description: "Bounced up from EMA50 (with tolerance)",
+            met: isPriceAboveEMA(price, ema50),
+            value: `price=${price.toFixed(2)}, ema50=${ema50.toFixed(2)}, atEMA=${isPriceAtEMA(price, ema50)}`
           });
-          wouldSignal = touch50.touched && ema50 > ema200 && price > ema50;
+          wouldSignal = touch50.touched && ema50 > ema200 && isPriceAboveEMA(price, ema50);
           break;
         }
         case "5m_above_200_reversal": {
@@ -1822,11 +1822,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
           conditions.push({
             name: "Price > EMA200",
-            description: "Closed above EMA200 (reversal)",
-            met: price > ema200,
-            value: `price=${price.toFixed(2)}, ema200=${ema200.toFixed(2)}`
+            description: "Closed above EMA200 (reversal, with tolerance)",
+            met: isPriceAboveEMA(price, ema200),
+            value: `price=${price.toFixed(2)}, ema200=${ema200.toFixed(2)}, atEMA=${isPriceAtEMA(price, ema200)}`
           });
-          wouldSignal = touch200.touched && ema200 > ema50 && price > ema200;
+          wouldSignal = touch200.touched && ema200 > ema50 && isPriceAboveEMA(price, ema200);
           break;
         }
         case "5m_pullback_to_200": {
@@ -1845,11 +1845,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
           conditions.push({
             name: "Price > EMA200",
-            description: "Bounced up from EMA200",
-            met: price > ema200,
-            value: `price=${price.toFixed(2)}, ema200=${ema200.toFixed(2)}`
+            description: "Bounced up from EMA200 (with tolerance)",
+            met: isPriceAboveEMA(price, ema200),
+            value: `price=${price.toFixed(2)}, ema200=${ema200.toFixed(2)}, atEMA=${isPriceAtEMA(price, ema200)}`
           });
-          wouldSignal = touch200.touched && ema50 > ema200 && price > ema200;
+          wouldSignal = touch200.touched && ema50 > ema200 && isPriceAboveEMA(price, ema200);
           break;
         }
         case "5m_below_200_bearish": {
@@ -1868,11 +1868,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
           conditions.push({
             name: "Price < EMA200",
-            description: "Closed below EMA200 (breakdown)",
-            met: price < ema200,
-            value: `price=${price.toFixed(2)}, ema200=${ema200.toFixed(2)}`
+            description: "Closed below EMA200 (breakdown, with tolerance)",
+            met: isPriceBelowEMA(price, ema200),
+            value: `price=${price.toFixed(2)}, ema200=${ema200.toFixed(2)}, atEMA=${isPriceAtEMA(price, ema200)}`
           });
-          wouldSignal = touch200.touched && ema50 > ema200 && price < ema200;
+          wouldSignal = touch200.touched && ema50 > ema200 && isPriceBelowEMA(price, ema200);
           break;
         }
         case "5m_touch_200_downtrend": {
@@ -1891,11 +1891,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
           conditions.push({
             name: "Price < EMA200",
-            description: "Rejected down from EMA200",
-            met: price < ema200,
-            value: `price=${price.toFixed(2)}, ema200=${ema200.toFixed(2)}`
+            description: "Rejected down from EMA200 (with tolerance)",
+            met: isPriceBelowEMA(price, ema200),
+            value: `price=${price.toFixed(2)}, ema200=${ema200.toFixed(2)}, atEMA=${isPriceAtEMA(price, ema200)}`
           });
-          wouldSignal = touch200.touched && ema200 > ema50 && price < ema200;
+          wouldSignal = touch200.touched && ema200 > ema50 && isPriceBelowEMA(price, ema200);
           break;
         }
         case "15m_below_200_breakdown": {
@@ -1914,11 +1914,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
           conditions.push({
             name: "Price < EMA200",
-            description: "Broke down below EMA200",
-            met: price < ema200,
-            value: `price=${price.toFixed(2)}, ema200=${ema200.toFixed(2)}`
+            description: "Broke down below EMA200 (with tolerance)",
+            met: isPriceBelowEMA(price, ema200),
+            value: `price=${price.toFixed(2)}, ema200=${ema200.toFixed(2)}, atEMA=${isPriceAtEMA(price, ema200)}`
           });
-          wouldSignal = touch200.touched && ema50 > ema200 && price < ema200;
+          wouldSignal = touch200.touched && ema50 > ema200 && isPriceBelowEMA(price, ema200);
           break;
         }
         default:
